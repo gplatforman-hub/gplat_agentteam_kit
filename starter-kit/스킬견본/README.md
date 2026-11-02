@@ -8,4 +8,5 @@
 | meeting-notes | 회의록 | P5 |
 | weekly-report | 주간보고 | P5-d |
 | data-summary | 엑셀·CSV 집계 | P5-e |
-| proposal · blog · workbook · planning-doc · budget-report | 직무 트랙 | 직무트랙 카드 |
+| data-merge | 여러 파일 취합·검증 | P4-e |
+| proposal · blog · workbook · planning-doc · budget-report · overseas-reply | 직무 트랙 | 직무트랙 카드 |

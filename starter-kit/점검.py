@@ -160,10 +160,10 @@ def team_name():
 
 
 COMMON_SKILLS = {"회의록": ("회의록", "meeting"), "주간보고": ("주간보고", "weekly"),
-                 "집계": ("집계", "data-summary", "aggregate")}
+                 "집계": ("집계", "data-summary", "aggregate"), "취합": ("취합", "data-merge")}
 TRACK_SKILLS = {"블로그": ("블로그", "blog"), "제안서": ("제안서", "proposal"),
                 "교재": ("교재", "워크북", "workbook"), "기획서": ("기획서", "planning"),
-                "예산실적": ("예산", "budget")}
+                "예산실적": ("예산", "budget"), "해외답장": ("해외", "overseas")}
 
 
 def skill_job_dirs(keys):

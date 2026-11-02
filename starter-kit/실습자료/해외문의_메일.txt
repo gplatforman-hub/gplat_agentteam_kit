@@ -1,0 +1,65 @@
+[가상 회사 실습자료 · 해외영업 트랙 · 받은 메일 3통]
+회사·사람·숫자는 전부 지어낸 것입니다. 보낸 사람은 역할로만 적었습니다.
+
+==================================================
+메일 1
+From: Purchasing Manager, Nordhaven Home (fictional retailer, Sweden)
+Date: 2026-10-29
+Subject: Quotation request - GL-100 and TB-500
+
+Hello,
+
+We are planning our spring 2027 kitchen campaign and would like a quotation for:
+- Airtight Container Set GL-100: 3,000 sets
+- Stainless Tumbler TB-500: 2,000 units
+
+Could you also tell us:
+1. Your MOQ and the production lead time
+2. Whether GL-100 has LFGB certification (we cannot sell food-contact items in the EU without it)
+3. Whether the TB-500 is dishwasher-safe - our customers always ask this
+
+We need your reply by 13 November to include you in the campaign.
+
+Best regards,
+Purchasing Manager, Nordhaven Home
+
+==================================================
+메일 2
+From: Product Coordinator, Sunline Trading (fictional distributor, Vietnam)
+Date: 2026-10-26
+Subject: Technical questions on ST-B and GL-100
+
+Hi team,
+
+Before we place our next order, our QA team has a few questions:
+1. Can the ST-B boxes go in a dishwasher?
+2. What is the maximum load per ST-B box? Our customers use them for books.
+3. What is the heat limit of the GL-100 lid? Can it go in the microwave together with the container?
+4. Is the GL-100 lid BPA-free?
+
+A short answer for each would be great.
+
+Thanks,
+Product Coordinator, Sunline Trading
+
+==================================================
+메일 3
+From: Store Operations Lead, Maple & Co. (fictional retailer, Canada)
+Date: 2026-10-30
+Subject: Complaint: ST-B lid cracks
+
+Hello,
+
+We received 400 sets of Storage Set B (ST-B) on 16 October.
+Our stores report that 12 lids have cracked. Most of them were in our warehouse in Winnipeg,
+where the temperature drops below zero at night.
+
+We would like to know:
+- Why this happened
+- Whether you will replace the cracked lids or give a credit
+- How to prevent it in future shipments
+
+Photos are available on request. Please reply as soon as possible.
+
+Regards,
+Store Operations Lead, Maple & Co.
