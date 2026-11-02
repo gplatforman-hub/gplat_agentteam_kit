@@ -28,6 +28,12 @@
     -Yes              (호환용) 남아 있는 Enter 대기를 건너뜀
     -PretendMissing   테스트용 — 특정 항목을 "없는 것"으로 가정
                       예) -PretendMissing node,git,claude-login
+    -SlackOnly        슬랙 열쇠 넣기·연결 시험·서버 기동·자동시작만 (슬랙열쇠_넣기.bat)
+    -MailOnly         메일 연결만 (메일_연결.bat · 부록 B-2)
+    -Mail             전체 점검 중에 메일 연결도 묻기 (기본은 묻지 않음)
+
+  2026-11-02: 한 줄 설치는 -SkipSlack 으로 부른다 — 설치 중에는 아무것도 묻지 않고,
+              슬랙 열쇠는 「슬랙 ①②」를 마친 뒤 슬랙열쇠_넣기.bat 으로 따로 넣는다.
 
   🔒 이 파일은 .env 의 열쇠 값을 화면에 찍지 않습니다. 붙여넣을 때도 별표(*)로 가립니다.
   🔒 로그인은 항상 사람이 직접 합니다. 비밀번호를 대신 입력하지 않습니다.
@@ -42,6 +48,9 @@ param(
     [switch]$NoBrowser,
     [switch]$NoPause,
     [switch]$Yes,
+    [switch]$SlackOnly,
+    [switch]$MailOnly,
+    [switch]$Mail,
     [string[]]$PretendMissing = @()
 )
 
@@ -171,7 +180,9 @@ function Set-Result {
     $i = -1
     for ($k = 0; $k -lt $script:Results.Count; $k++) { if ($script:Results[$k].Id -eq $Id) { $i = $k } }
     if ($i -ge 0) { $script:Results[$i] = $row } else { $null = $script:Results.Add($row) }
+    # 선택 항목은 없어도 수업이 되므로 빨간 ❌ 대신 노란 ⚠ 로 보인다 (2026-11-02)
     $mark = $NOM; $color = 'Red'
+    if ($Group -eq '선택') { $mark = $WRN; $color = 'Yellow' }
     if ($Ok) { $mark = $OKM; $color = 'Green' }
     Write-Host ("  {0}  {1}" -f $mark, $Name) -ForegroundColor $color
     if ($Detail) { Write-Host ("        └ {0}" -f $Detail) -ForegroundColor DarkGray }
@@ -376,7 +387,7 @@ function Check-MyData {
 function Check-SlackEnv {
     # 🔒 값은 절대 화면에 찍지 않는다. 키 이름과 앞머리(xoxb-/xapp-)만 본다.
     $env_ = Join-Path $KIT 'slack-server\.env'
-    $fix = '교안 슬랙 ①② 쪽대로 열쇠 3개를 받아 두고 환경점검.bat 을 다시 실행해 붙여넣습니다'
+    $fix = '교안 슬랙 ①② 쪽대로 열쇠를 받아 두고 슬랙열쇠_넣기.bat 을 실행해 붙여넣습니다'
     $url = 'https://api.slack.com/apps'
     if (-not (Test-Path $env_)) {
         $stray = @(Get-ChildItem (Join-Path $KIT 'slack-server') -Filter '.env.*' -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '.env.example' })
@@ -603,13 +614,14 @@ function Fix-Slack {
     if ($SkipSlack -or $SkipLogin) { Write-Info '(-SkipSlack) 슬랙 열쇠 입력 생략'; return }
     $srv = Join-Path $KIT 'slack-server'
     $envf = Join-Path $srv '.env'
-    Write-Step '슬랙 열쇠 3개 넣기 — 교안 슬랙 ①② 쪽에서 받아 둔 값을 하나씩 붙여넣습니다'
+    Write-Step '슬랙 열쇠 넣기 — 교안 슬랙 ①② 쪽에서 받아 둔 값을 교안과 같은 순서로 붙여넣습니다'
     Write-Info '붙여넣기는 마우스 오른쪽 클릭. 값은 별표(*)로 가려지고 .env 파일에만 저장됩니다.'
-    Write-Info '아직 못 받았으면 s 를 치고 Enter — 나중에 환경점검.bat 을 다시 실행하면 이 자리부터 다시 묻습니다.'
-    $bot = Read-Secret '① 봇 토큰 SLACK_BOT_TOKEN' 'xoxb-'
-    if (-not $bot) { Write-Info '슬랙은 나중에. 교안 슬랙 ①② 쪽대로 받아 오세요.'; return }
-    $appT = Read-Secret '② 앱 토큰 SLACK_APP_TOKEN' 'xapp-'
-    if (-not $appT) { Write-Info '슬랙은 나중에.'; return }
+    Write-Info '아직 못 받았으면 s 를 치고 Enter — 나중에 슬랙열쇠_넣기.bat 을 실행하면 이 자리부터 다시 묻습니다.'
+    # 2026-11-02: 교안이 앱 토큰(xapp)을 먼저 받으므로 묻는 순서도 앱 → 봇
+    $appT = Read-Secret '① 앱 토큰 SLACK_APP_TOKEN' 'xapp-'
+    if (-not $appT) { Write-Info '슬랙은 나중에. 교안 슬랙 ①② 쪽대로 받아 오세요.'; return }
+    $bot = Read-Secret '② 봇 토큰 SLACK_BOT_TOKEN' 'xoxb-'
+    if (-not $bot) { Write-Info '슬랙은 나중에.'; return }
     $owner = ''
     while ($true) {
         $owner = (Read-Host '  ? ③ 내 멤버 ID OWNER_USER_ID — U 로 시작하는 값 (슬랙 앱 → 내 프로필 → ⋯ 더보기 → 멤버 ID 복사)').Trim().Trim('"').Trim("'")
@@ -649,7 +661,7 @@ function Test-SlackLive {
     $lines = @($r.out -split "`r?`n" | Where-Object { $_.Trim() })
     foreach ($l in $lines) { Write-Info $l }
     $d = ($lines | Select-Object -Last 1); if (-not $d) { $d = '응답 없음' }
-    Set-Result 'slack-live' '슬랙 열쇠가 실제로 통한다' '필수' $r.ok $d '틀린 열쇠를 다시 받아 환경점검.bat 을 다시 실행'
+    Set-Result 'slack-live' '슬랙 열쇠가 실제로 통한다' '필수' $r.ok $d '틀린 열쇠를 다시 받아 슬랙열쇠_넣기.bat 을 다시 실행'
 }
 
 function Test-Server {
@@ -734,7 +746,7 @@ function Check-MailEnv {
     # 🔒 값은 절대 화면에 찍지 않는다. 키 이름이 있는지만 본다.
     $envf = Join-Path $KIT 'mail\.env'
     if (-not (Test-Path (Join-Path $KIT 'mail\mail_check.py'))) { return }
-    if (-not (Test-Path $envf)) { return (Set-Result 'mail' '메일 연결 (네이버·다음·지메일 앱 비밀번호)' '선택' $false 'mail\.env 가 아직 없습니다' '환경점검.bat 을 다시 실행해 앱 비밀번호를 붙여넣습니다' 'https://mail.naver.com/') }
+    if (-not (Test-Path $envf)) { return (Set-Result 'mail' '메일 연결 (네이버·다음·지메일 앱 비밀번호)' '선택' $false 'mail\.env 가 아직 없습니다 (부록 B-2 · 수업 뒤 선택)' '메일_연결.bat 을 실행해 앱 비밀번호를 붙여넣습니다' 'https://mail.naver.com/') }
     $vals = @{}
     foreach ($line in (Get-Content $envf -Encoding UTF8 -ErrorAction SilentlyContinue)) {
         $l = $line -replace '^﻿', ''
@@ -744,23 +756,44 @@ function Check-MailEnv {
     }
     $missing = @(@('MAIL_PROVIDER', 'MAIL_USER', 'MAIL_APP_PASSWORD') | Where-Object { -not $vals.ContainsKey($_) -or -not $vals[$_] })
     $d = "$($vals['MAIL_PROVIDER']) $($vals['MAIL_USER']) (비밀번호는 확인하지 않습니다)"; if ($missing.Count) { $d = ($missing -join ', ') + ' 비어 있음' }
-    Set-Result 'mail' '메일 연결 (네이버·다음·지메일 앱 비밀번호)' '선택' ($missing.Count -eq 0) $d '환경점검.bat 을 다시 실행해 앱 비밀번호를 붙여넣습니다' 'https://mail.naver.com/'
+    Set-Result 'mail' '메일 연결 (네이버·다음·지메일 앱 비밀번호)' '선택' ($missing.Count -eq 0) $d '메일_연결.bat 을 실행해 앱 비밀번호를 붙여넣습니다' 'https://mail.naver.com/'
 }
 
 function Fix-Mail {
     # 메일은 선택이다. 슬랙 열쇠처럼 별표로 받아 mail\.env 에만 저장한다. s 면 건너뛴다.
-    if ((Is-Ok 'mail') -or $SkipSlack -or $SkipLogin) { return }
+    # 2026-11-02: 설치·환경점검에서는 묻지 않는다. 메일_연결.bat(-MailOnly) 또는 -Mail 일 때만.
+    if (-not ($Mail -or $MailOnly)) { return }
+    if ((Is-Ok 'mail') -or $SkipLogin) { return }
     if (-not (Test-Path (Join-Path $KIT 'mail\mail_check.py'))) { return }
     $envf = Join-Path $KIT 'mail\.env'
-    Write-Step '메일 연결 (선택) — 강의 문의 메일을 직원이 읽게 합니다. 앱 비밀번호는 교안 7쪽대로 미리 받아 둡니다'
+    Write-Step '메일 연결 (선택) — 메일을 직원이 읽게 합니다. 앱 비밀번호는 교안 부록 B-2 대로 미리 받아 둡니다'
+    Write-Info '연습은 개인 메일로 합니다. 회사 메일은 회사 승인을 받은 뒤에만 custom 으로 연결합니다.'
     Write-Info '네이버: 메일 → 환경설정 → POP3/IMAP 에서 IMAP 켜기 → 네이버 보안 → 2단계 인증 → 애플리케이션 비밀번호'
     Write-Info '다음: 메일 → 설정 → IMAP/SMTP 사용 → 카카오계정 2단계 인증 → 앱 비밀번호   /   지메일: 구글 계정 → 보안 → 앱 비밀번호'
     $prov = ''
     while ($true) {
-        $prov = (Read-Host '  ? 어느 메일인가요 — naver / daum / gmail 중 하나 (나중에 하려면 s)').Trim().ToLower()
+        $prov = (Read-Host '  ? 어느 메일인가요 — naver / daum / gmail / custom(회사 메일) 중 하나 (나중에 하려면 s)').Trim().ToLower()
         if ($prov -eq 's') { Write-Info '메일은 나중에. 수업 뒤 부록 카드 B-2 로 다시 할 수 있습니다.'; return }
-        if ($prov -in @('naver', 'daum', 'gmail')) { break }
-        Write-Warn 'naver, daum, gmail 중 하나를 영문으로 적어 주세요'
+        if ($prov -in @('naver', 'daum', 'gmail', 'custom')) { break }
+        Write-Warn 'naver, daum, gmail, custom 중 하나를 영문으로 적어 주세요 (회사 메일이 구글 워크스페이스면 gmail)'
+    }
+    # 2026-11-03: 회사 메일 — 서버 주소를 받는다. 회사 승인이 먼저.
+    $custom = ''
+    if ($prov -eq 'custom') {
+        Write-Warn '회사 메일은 회사 승인이 먼저입니다 — IMAP 접속 허용, 메일 본문을 Claude 가 읽는 것, 발송은 사람이 하는 것까지.'
+        Write-Info '서버 주소는 회사 IT 에 물어보세요. 마이크로소프트 365(아웃룩)는 이 방식으로 연결되지 않습니다.'
+        $ok = (Read-Host '  ? 회사 승인을 받았나요 (y / n)').Trim().ToLower()
+        if ($ok -ne 'y') { Write-Info '승인 뒤에 메일_연결.bat 을 다시 실행하세요. 연습은 개인 메일로 합니다.'; return }
+        $imapH = ''
+        while (-not $imapH) {
+            $imapH = (Read-Host '  ? 받는 메일 서버 IMAP 주소 (예: imap.회사도메인)').Trim().Trim('"').Trim("'")
+            if ($imapH -match '(^|\.)(office365|outlook)\.com$') { Write-Warn '마이크로소프트 365 는 연결되지 않습니다. 개인 메일로 연습하세요.'; return }
+        }
+        $imapP = (Read-Host '  ? IMAP 포트 (모르면 그냥 Enter = 993)').Trim()
+        $smtpH = (Read-Host '  ? 보내는 메일 서버 SMTP 주소 (읽기만 할 거면 그냥 Enter)').Trim().Trim('"').Trim("'")
+        $smtpP = ''
+        if ($smtpH) { $smtpP = (Read-Host '  ? SMTP 포트 (모르면 그냥 Enter = 465, 587 도 됩니다)').Trim() }
+        $custom = "MAIL_IMAP_HOST=$imapH`nMAIL_IMAP_PORT=$imapP`nMAIL_SMTP_HOST=$smtpH`nMAIL_SMTP_PORT=$smtpP`n"
     }
     $user = ''
     while ($true) {
@@ -779,7 +812,7 @@ function Fix-Mail {
         Write-Warn '너무 짧습니다. 앱 비밀번호를 다시 붙여넣으세요 (붙여넣기 = 마우스 오른쪽 클릭)'
     }
     $body = "# 메일 열쇠 — 환경점검이 $([DateTime]::Now.ToString('yyyy-MM-dd HH:mm')) 에 저장. 비밀번호와 같습니다. 남에게 주지 마세요.`n" +
-            "MAIL_PROVIDER=$prov`nMAIL_USER=$user`nMAIL_APP_PASSWORD=$pw`nMAIL_ALLOW_EXTERNAL=0`n"
+            "MAIL_PROVIDER=$prov`nMAIL_USER=$user`nMAIL_APP_PASSWORD=$pw`nMAIL_ALLOW_EXTERNAL=0`n" + $custom
     try {
         [IO.File]::WriteAllText($envf, $body, (New-Object System.Text.UTF8Encoding($false)))   # BOM 없이
         Write-Info "mail\.env 저장됨 (BOM 없음)"
@@ -865,7 +898,7 @@ td.name{font-weight:600;width:34%}
     foreach ($grp in @(@('필수 — 이게 다 ✅ 여야 수업을 시작할 수 있습니다', $req), @('선택 — 없어도 실습되지만, 집에서 스킬을 쓰려면 필요합니다', $opt))) {
         $null = $sb.Append("<h2>$($grp[0])</h2><table><tr><th></th><th>항목</th><th>확인 결과</th></tr>")
         foreach ($r in $grp[1]) {
-            $m = '❌'; if ($r.Ok) { $m = '✅' }
+            $m = '❌'; if ($r.Group -eq '선택') { $m = '⚠️' }; if ($r.Ok) { $m = '✅' }
             $fix = ''
             if (-not $r.Ok -and ($r.Fix -or $r.Url)) {
                 $fix = '<div class="fix">→ ' + (Html $r.Fix)
@@ -880,9 +913,9 @@ td.name{font-weight:600;width:34%}
     $null = $sb.Append(@"
 <div class="slab"><b>다음 할 일</b>
 <ol>
-<li>❌ 가 있으면 그 줄의 안내대로 고치고 <b>환경점검.bat</b> 을 다시 더블클릭합니다.</li>
-<li>전부 ✅ 면 검은 창에서 <b>py -3 점검.py 0</b> 으로 한 번 더 확인하고, 프롬프트카드.md 의 모듈 0 부터 시작합니다.</li>
-<li>슬랙 열쇠는 <b>모듈 4 전까지</b>만 준비되면 됩니다. Google Flow·네이버 로그인은 집에서 스킬을 쓸 때 하면 됩니다.</li>
+<li>슬랙 줄만 ❌ 라면 정상입니다. 교안 <b>슬랙 ①②</b> 로 열쇠를 받은 뒤 <b>슬랙열쇠_넣기.bat</b> 을 더블클릭합니다.</li>
+<li>다른 ❌ 가 있으면 그 줄의 안내대로 고치고 <b>환경점검.bat</b> 을 다시 더블클릭합니다.</li>
+<li>⚠️ 는 선택 항목이라 없어도 수업이 됩니다. 메일은 부록 B-2 의 <b>메일_연결.bat</b> 으로 따로 합니다.</li>
 </ol>
 <div class="foot">이 점검은 열쇠 값을 읽거나 저장하지 않으며, 로그인은 항상 본인이 직접 합니다. · gplatform</div>
 </div>
@@ -897,10 +930,38 @@ Write-Host '  ┌─────────────────────
 Write-Host '  │   에이전트팀 만들기 과정 — 출발선 자동 점검·설치   │' -ForegroundColor Magenta
 Write-Host '  └──────────────────────────────────────────────────┘' -ForegroundColor Magenta
 Write-Info "스타터킷: $KIT"
-Write-Info '이 프로그램은 묻지 않고 설치합니다. 사람이 할 일은 로그인과 슬랙 열쇠 붙여넣기뿐입니다.'
 if ($PretendMissing.Count) { Write-Warn "테스트 모드 — 없는 것으로 가정: $($PretendMissing -join ', ')" }
 
 $script:PY = $null
+
+if ($SlackOnly) {
+    # 슬랙열쇠_넣기.bat — 설치는 이미 끝났다고 보고 슬랙 부분만 한다
+    try { $Host.UI.RawUI.WindowTitle = '에이전트팀 만들기 — 슬랙 열쇠 넣기' } catch {}
+    Write-Step '1/3 준비 확인 (파이썬 · 꾸러미 · 폴더)'
+    Check-Python | Out-Null
+    if (-not $script:PY) { Check-Pip | Out-Null }
+    Check-PyPackages | Out-Null
+    Check-Folders | Out-Null
+    if (-not (Is-Ok 'python') -or -not (Is-Ok 'pypkg')) { Write-Warn '설치가 덜 끝났습니다. 환경점검.bat 을 먼저 실행하세요.' }
+    Write-Step '2/3 슬랙 열쇠 넣기 · 연결 시험'
+    Check-SlackEnv | Out-Null
+    Fix-Slack
+    Test-SlackLive
+    Write-Step '3/3 슬랙 서버 첫 기동 · 자동시작 등록'
+    Test-Server
+    Enable-Autostart
+} elseif ($MailOnly) {
+    # 메일_연결.bat — 부록 B-2
+    try { $Host.UI.RawUI.WindowTitle = '에이전트팀 만들기 — 메일 연결' } catch {}
+    Write-Step '메일 연결 (부록 B-2 · 선택)'
+    Check-Python | Out-Null
+    if (-not $script:PY) { Check-Pip | Out-Null }
+    Check-MailEnv | Out-Null
+    Fix-Mail
+    Test-MailLive
+} else {
+if ($SkipSlack) { Write-Info '이 프로그램은 묻지 않고 설치합니다. 사람이 할 일은 로그인 창이 뜨면 로그인하는 것뿐입니다.' }
+else { Write-Info '이 프로그램은 묻지 않고 설치합니다. 사람이 할 일은 로그인과 슬랙 열쇠 붙여넣기뿐입니다.' }
 
 Write-Step '0/6 준비 — 파워셸 실행 허용'
 Fix-ExecutionPolicy | Out-Null
@@ -947,6 +1008,7 @@ Fix-Mail
 Test-MailLive
 Check-NaverLogin | Out-Null
 Fix-OptionalLogins
+}
 
 # ── 7. 최종 체크리스트 ───────────────────────────────────────
 Write-Host ''
@@ -956,7 +1018,7 @@ $opt = @($script:Results | Where-Object { $_.Group -eq '선택' })
 Write-Host '  [필수]' -ForegroundColor White
 foreach ($r in $req) { $m = $NOM; $c = 'Red'; if ($r.Ok) { $m = $OKM; $c = 'Green' }; Write-Host "  $m $($r.Name)" -ForegroundColor $c; if (-not $r.Ok) { Write-Host "        └ $($r.Detail)" -ForegroundColor DarkGray; if ($r.Fix) { Write-Host "        └ 고치기: $($r.Fix)" -ForegroundColor Yellow } } }
 Write-Host '  [선택]' -ForegroundColor White
-foreach ($r in $opt) { $m = $NOM; $c = 'Red'; if ($r.Ok) { $m = $OKM; $c = 'Green' }; Write-Host "  $m $($r.Name)" -ForegroundColor $c }
+foreach ($r in $opt) { $m = $WRN; $c = 'Yellow'; if ($r.Ok) { $m = $OKM; $c = 'Green' }; Write-Host "  $m $($r.Name)" -ForegroundColor $c }
 $reqOk = @($req | Where-Object { $_.Ok }).Count
 $optOk = @($opt | Where-Object { $_.Ok }).Count
 Write-Host '  ─────────────────────────────────────────────────' -ForegroundColor Magenta
@@ -964,6 +1026,12 @@ if ($reqOk -eq $req.Count) {
     Write-Host "  🎉 필수 $reqOk/$($req.Count) 전부 통과 · 선택 $optOk/$($opt.Count) — 출발 준비 완료! 창을 새로 열고 claude 를 부르세요." -ForegroundColor Green
 } else {
     Write-Host "  필수 $reqOk/$($req.Count) 통과 · 선택 $optOk/$($opt.Count) — ❌ 표시된 것만 고치고 다시 실행하세요." -ForegroundColor Yellow
+}
+$slackLeft = @($req | Where-Object { -not $_.Ok -and $_.Id -in 'slack', 'slack-live', 'server' })
+$otherLeft = @($req | Where-Object { -not $_.Ok -and $_.Id -notin 'slack', 'slack-live', 'server', 'autostart' })
+if ($slackLeft.Count -and -not $otherLeft.Count -and -not $SlackOnly) {
+    Write-Host '  👉 슬랙 줄만 ❌ 면 정상입니다. 교안 「슬랙 ①②」로 열쇠를 받은 뒤 아래 파일을 더블클릭하세요.' -ForegroundColor Cyan
+    Write-Host "     $(Join-Path $KIT '슬랙열쇠_넣기.bat')" -ForegroundColor Cyan
 }
 
 try { Write-Report; Write-Info "결과 파일: $REPORT"; if (-not $NoBrowser) { Start-Process $REPORT } } catch { Write-Warn "HTML 저장 실패: $_" }

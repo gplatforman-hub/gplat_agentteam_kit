@@ -54,6 +54,17 @@ PROVIDERS = {
               "pw_hint": "구글 계정 → 보안 → 2단계 인증 → 앱 비밀번호"},
 }
 
+# 2026-11-03: 회사 메일(custom). 서버 주소는 .env 의 MAIL_IMAP_HOST · MAIL_SMTP_HOST 로 받는다.
+#   포트는 비우면 IMAP 993(SSL) / SMTP 465(SSL). SMTP 587 이면 STARTTLS 로 붙는다.
+#   회사 IT 가 IMAP 접속과 앱 비밀번호(또는 메일 전용 비밀번호)를 허용해야 한다.
+CUSTOM_HINTS = {
+    "label": "회사 메일",
+    "imap_hint": "회사 메일 관리자(IT)에게 IMAP 접속 허용 여부와 서버 주소를 물어보세요",
+    "pw_hint": "회사 메일 관리자(IT)가 안내하는 앱 비밀번호(메일 프로그램용 비밀번호)",
+}
+# 비밀번호 방식 IMAP 을 막아 둔 곳 — OAuth 가 필요해 이 킷으로는 붙지 않는다.
+OAUTH_ONLY_HOSTS = ("outlook.office365.com", "office365.com", "outlook.com", "smtp.office365.com")
+
 # 답이 필요한 문의로 볼 낱말 — 제목·본문에 하나라도 있으면 📌문의
 INQUIRY_WORDS = ("문의", "요청", "견적", "제안", "회신", "확인 부탁", "일정", "교육")
 
@@ -161,7 +172,8 @@ def load_env() -> tuple[dict[str, str], str]:
             vals = _parse_env_file(p)
             source = str(p)
             break
-    for k in ("MAIL_PROVIDER", "MAIL_USER", "MAIL_APP_PASSWORD", "MAIL_ALLOW_EXTERNAL"):
+    for k in ("MAIL_PROVIDER", "MAIL_USER", "MAIL_APP_PASSWORD", "MAIL_ALLOW_EXTERNAL",
+              "MAIL_IMAP_HOST", "MAIL_IMAP_PORT", "MAIL_SMTP_HOST", "MAIL_SMTP_PORT"):
         if os.environ.get(k):
             vals[k] = os.environ[k]
             source = source or "환경변수"
@@ -171,15 +183,19 @@ def load_env() -> tuple[dict[str, str], str]:
 class MailConfig:
     """provider / user / app_password / allow_external. 🔒 repr 에도 비밀번호는 안 나온다."""
 
-    def __init__(self, provider: str, user: str, app_password: str, allow_external: bool, source: str):
+    def __init__(self, provider: str, user: str, app_password: str, allow_external: bool, source: str,
+                 custom: dict | None = None):
         self.provider = provider
         self.user = user
         self.app_password = app_password
         self.allow_external = allow_external
         self.source = source
+        self.custom = custom   # provider == "custom" 일 때만: {"imap": (host, port), "smtp": (host, port)}
 
     @property
     def spec(self) -> dict:
+        if self.provider == "custom":
+            return {**CUSTOM_HINTS, **(self.custom or {})}
         return PROVIDERS[self.provider]
 
     @property
@@ -203,22 +219,54 @@ def load_config() -> MailConfig:
     pw = (vals.get("MAIL_APP_PASSWORD") or "").strip()
     allow = (vals.get("MAIL_ALLOW_EXTERNAL") or "0").strip()
 
-    if provider not in PROVIDERS:
+    if provider not in PROVIDERS and provider != "custom":
         raise MailError(
             f"MAIL_PROVIDER 값이 '{provider or '(비어 있음)'}' 입니다",
-            "naver / daum / gmail 중 하나로 적으세요")
+            "naver / daum / gmail / custom(회사 메일) 중 하나로 적으세요")
+    custom = None
+    if provider == "custom":
+        custom = _custom_servers(vals)
     if not user or "@" not in user or user.startswith("아이디@"):
         raise MailError(
             "MAIL_USER 가 비어 있거나 메일 주소 모양이 아닙니다",
             "hong@naver.com 처럼 @ 가 들어간 전체 주소를 적으세요")
     if not pw:
+        hint = CUSTOM_HINTS["pw_hint"] if provider == "custom" else PROVIDERS[provider]["pw_hint"]
         raise MailError(
             "MAIL_APP_PASSWORD 가 비어 있습니다",
-            f"{PROVIDERS[provider]['pw_hint']} 에서 발급받아 붙여넣으세요 (평소 로그인 비밀번호가 아닙니다)")
+            f"{hint} 를 발급받아 붙여넣으세요 (평소 로그인 비밀번호가 아닙니다)")
     if " " in pw:
         # 구글 앱 비밀번호는 'abcd efgh ijkl mnop' 처럼 띄어서 보여준다. 붙여 쓰는 게 맞다.
         pw = pw.replace(" ", "")
-    return MailConfig(provider, user, pw, allow == "1", source)
+    return MailConfig(provider, user, pw, allow == "1", source, custom)
+
+
+def _custom_servers(vals: dict[str, str]) -> dict:
+    """회사 메일 서버 주소·포트를 읽는다. 마이크로소프트 365 는 비밀번호 방식이 막혀 있어 미리 알려 준다."""
+    imap_host = (vals.get("MAIL_IMAP_HOST") or "").strip().lower()
+    smtp_host = (vals.get("MAIL_SMTP_HOST") or "").strip().lower()
+    if not imap_host:
+        raise MailError(
+            "회사 메일인데 MAIL_IMAP_HOST(받는 메일 서버 주소)가 비어 있습니다",
+            "회사 IT 에 IMAP 서버 주소를 물어 mail/.env 에 적으세요 (예: imap.회사도메인)")
+    for h in (imap_host, smtp_host):
+        if h and any(h == o or h.endswith("." + o) for o in OAUTH_ONLY_HOSTS):
+            raise MailError(
+                "마이크로소프트 365(아웃룩) 메일은 비밀번호 방식 접속이 막혀 있어 이 킷으로는 연결되지 않습니다",
+                "회사 IT 에 문의하거나 개인 메일로 연습하세요")
+
+    def port(key: str, default: int) -> int:
+        raw = (vals.get(key) or "").strip()
+        if not raw:
+            return default
+        if not raw.isdigit():
+            raise MailError(f"{key} 값이 숫자가 아닙니다", "993·465·587 같은 숫자만 적으세요 (비우면 기본값)")
+        return int(raw)
+
+    out = {"imap": (imap_host, port("MAIL_IMAP_PORT", 993))}
+    if smtp_host:
+        out["smtp"] = (smtp_host, port("MAIL_SMTP_PORT", 465))
+    return out
 
 
 # ── 접속 ──────────────────────────────────────────────────────
@@ -262,10 +310,18 @@ def connect_imap(cfg: MailConfig) -> imaplib.IMAP4_SSL:
 
 def connect_smtp(cfg: MailConfig) -> smtplib.SMTP_SSL:
     """보내는 서버에 로그인해서 돌려준다. 실패하면 MailError."""
+    if "smtp" not in cfg.spec:
+        raise MailError(
+            "회사 메일의 MAIL_SMTP_HOST(보내는 메일 서버 주소)가 비어 있습니다",
+            "읽기만 할 거면 그대로 두고, 보내기까지 하려면 회사 IT 에 SMTP 서버 주소를 물어 적으세요")
     host, port = cfg.spec["smtp"]
     try:
-        S = smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=TIMEOUT)
-    except (socket.gaierror, socket.timeout, TimeoutError, ConnectionError, OSError, ssl.SSLError) as e:
+        if port == 587:   # 회사 서버에 흔한 방식 — 평문으로 붙은 뒤 STARTTLS 로 암호화
+            S = smtplib.SMTP(host, port, timeout=TIMEOUT)
+            S.starttls(context=ssl.create_default_context())
+        else:
+            S = smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=TIMEOUT)
+    except (socket.gaierror, socket.timeout, TimeoutError, ConnectionError, OSError, ssl.SSLError, smtplib.SMTPException) as e:
         raise _net_error(e, host)
 
     last = ""

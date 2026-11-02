@@ -133,8 +133,12 @@ Info "내 양식(선택): $Root\MyData 의 Report·Minutes 에 보고서 3·회�
 if ($env:WD_NO_ENVCHECK) {
     Info '환경점검은 건너뜁니다 (WD_NO_ENVCHECK).'
 } else {
-    Step '환경점검 시작 — 프로그램·파이썬 3.14·꾸러미를 묻지 않고 설치합니다. 사람이 할 일은 로그인과 슬랙 열쇠 붙여넣기뿐'
-    $null = Run-Script (Join-Path $Kit 'env_check.ps1') @()
+    # 2026-11-02: 설치 중에는 슬랙 열쇠·메일을 묻지 않는다. 열쇠는 슬랙열쇠_넣기.bat 으로 따로 넣는다.
+    Step '환경점검 시작 — 프로그램·파이썬 3.14·꾸러미를 묻지 않고 설치합니다. 사람이 할 일은 로그인 창이 뜨면 로그인하는 것뿐'
+    Info '설치가 도는 동안 브라우저에서 교안 「슬랙 ①②」(앱 만들기·열쇠 받기)를 진행하세요.'
+    $null = Run-Script (Join-Path $Kit 'env_check.ps1') @('-SkipSlack')
+    Write-Host ''
+    Info "다음: 슬랙 열쇠를 받았으면 $Kit\슬랙열쇠_넣기.bat 을 더블클릭합니다"
 }
 
 Write-Host ''

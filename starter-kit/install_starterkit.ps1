@@ -215,7 +215,8 @@ if (-not $NoOpen) {
 # 2026-09-07: 묻지 않고 바로 환경점검으로 넘어간다. 프로그램 설치·파이썬 3.14·꾸러미·슬랙 열쇠까지 거기서 끝낸다.
 if (-not $SkipEnvironmentCheck) {
     Write-Step '이어서 환경점검·자동 설치를 시작합니다 (묻지 않습니다)'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $targetKit 'env_check.ps1') | Out-Host
+    # 2026-11-02: 설치 중에는 슬랙 열쇠를 묻지 않는다 — 슬랙열쇠_넣기.bat 으로 따로
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $targetKit 'env_check.ps1') -SkipSlack | Out-Host
 }
 
 Write-Host ''

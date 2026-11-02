@@ -43,7 +43,10 @@ def main() -> int:
         print(f"FAIL: {head} IMAP ❌ {e.line()}")
         return 1
 
-    # SMTP (보내기)
+    # SMTP (보내기) — 회사 메일에서 보내는 서버를 비워 두면 읽기 전용으로 본다
+    if "smtp" not in cfg.spec:
+        print(f"OK: {head} IMAP ✅ SMTP — (보내는 서버 없음 · 읽기만)")
+        return 0
     try:
         S = connect_smtp(cfg)
         try:
