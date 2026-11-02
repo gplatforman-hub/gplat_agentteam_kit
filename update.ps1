@@ -1,0 +1,263 @@
+# ============================================================
+#  gplatform AI 에이전트팀 (직장인판) 스타터킷 — 엔진 업데이트 (이미 설치한 수강생용)
+#
+#  PowerShell 창에 아래 한 줄만 붙여넣습니다. (CMD 창이면 아래 두 번째 줄)
+#    irm https://raw.githubusercontent.com/gplatforman-hub/gplat_agentteam_kit/main/update.ps1 | iex
+#    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/gplatforman-hub/gplat_agentteam_kit/main/update.ps1 | iex"
+#
+#  하는 일 (2026-09-08)
+#    1) 켜져 있는 슬랙 서버(server.py)를 끈다
+#    2) 새 판 묶음을 통째로 받아, 내가 만든 것만 빼고 모두 새 판으로 바꾼다 (2026-10-02 방식 변경)
+#       ※ 내가 만든 것(직원 .claude/agents · 스킬 · personas.py · agent_channels.py · .env · workspace)은 건드리지 않는다
+#    3) 바꾸기 전 파일은 starter-kit\backup\update-날짜\ 에 남긴다
+#    4) 어제 대화(.agent_session.json)를 지워 새 대화로 시작한다 — 잘못 기억한 이름이 여기서 끊긴다
+#    5) 강사 이름이 내 설정 파일에 들어가 있는지 살펴보고 알려준다 (지우지는 않는다)
+#    6) py 점검.py 4 로 확인하고, 서버를 새 창에서 다시 켠다
+#
+#  고치는 증상: ① 직원이 나를 남(강사) 이름으로 부름  ② 팀장만 대답하고 나머지 직원이 안 나옴
+#              ③ 이모지·캐릭터(인사말)가 안 생김
+#
+#  선택 환경변수:  $env:WD_INSTALL_ROOT = 'D:\Agent'   (설치 위치를 바꿨을 때)
+#  이 파일은 UTF-8(BOM 없음)이며 raw.githubusercontent.com 이 charset=utf-8 로 내려준다.
+# ============================================================
+
+& {
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+try { $null = & "$env:ComSpec" /c chcp 65001 } catch {}
+try {
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    [Console]::InputEncoding  = [Text.Encoding]::UTF8
+} catch {}
+try { $Host.UI.RawUI.WindowTitle = 'gplatform AI 에이전트팀 (직장인판) — 엔진 업데이트' } catch {}
+
+$Repo    = 'gplatforman-hub/gplat_agentteam_kit'
+$Branch  = 'main'
+$RawBase = "https://raw.githubusercontent.com/$Repo/$Branch/starter-kit"
+
+$Root = 'C:\AgentOffice'
+if ($env:WD_INSTALL_ROOT) { $Root = $env:WD_INSTALL_ROOT }
+$Root = [IO.Path]::GetFullPath($Root)
+$Kit  = Join-Path $Root '01_KIT\starter-kit'
+$Srv  = Join-Path $Kit 'slack-server'
+
+function Step([string]$t) { Write-Host ''; Write-Host "  ▶ $t" -ForegroundColor Magenta }
+function Info([string]$t) { Write-Host "     $t" -ForegroundColor DarkGray }
+function Warn([string]$t) { Write-Host "     ⚠️  $t" -ForegroundColor Yellow }
+function Fail([string]$t) { Write-Host ''; Write-Host "  ❌ $t" -ForegroundColor Red; Write-Host ''; throw $t }
+
+Write-Host ''
+Write-Host '  gplatform AI 에이전트팀 (직장인판) — 엔진 업데이트 (2026-09-08 판)' -ForegroundColor Magenta
+Write-Host "  대상: $Kit" -ForegroundColor DarkGray
+
+if (-not (Test-Path -LiteralPath (Join-Path $Srv 'server.py'))) {
+    Fail "설치된 스타터킷을 못 찾았습니다: $Kit`n     처음 설치라면 대신 이 한 줄:  irm https://raw.githubusercontent.com/$Repo/$Branch/install.ps1 | iex"
+}
+
+# ── 1. 켜져 있는 서버 끄기 ──────────────────────────────────
+Step '켜져 있는 슬랙 서버 끄기'
+$killed = 0
+if ($env:WD_NO_KILL) {
+    Info '서버 끄기는 건너뜁니다 (WD_NO_KILL). 켜져 있으면 그 창에서 Ctrl+C.'
+} else {
+    try {
+        # 2026-09-20: 자동시작(supervisor)으로 떠 있는 킷 서버부터 내린다.
+        # 감시기를 먼저 죽이지 않으면 서버를 꺼도 10초 뒤 되살아나 옛 판이 계속 돈다.
+        # 어느 python 을 끌지는 이름이 아니라 킷이 적어둔 PID 파일로 고른다 — 강사 홈서버를 지키기 위해서다.
+        foreach ($pf in @('supervisor.pid', 'server.pid')) {
+            $pfp = Join-Path $Srv "logs\$pf"
+            if (Test-Path -LiteralPath $pfp) {
+                $tid = (Get-Content -LiteralPath $pfp -ErrorAction SilentlyContinue | Select-Object -First 1) -as [int]
+                $want = if ($pf -eq 'supervisor.pid') { 'powershell' } else { 'python' }
+                if ($tid) {
+                    $tp = Get-Process -Id $tid -ErrorAction SilentlyContinue
+                    if ($tp -and $tp.ProcessName -eq $want) {
+                        try { Stop-Process -Id $tid -Force -ErrorAction Stop; $killed++ } catch {}
+                    }
+                }
+                Remove-Item -LiteralPath $pfp -ErrorAction SilentlyContinue
+            }
+            Start-Sleep -Milliseconds 400
+        }
+        # 손으로 검은 창에서 켠 서버도 내린다 (감시기 자식은 제외)
+        $all = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+        $all | Where-Object {
+            $_.Name -match '^python' -and $_.CommandLine -and $_.CommandLine -match 'server\.py'
+        } | ForEach-Object {
+            $ppid = $_.ParentProcessId
+            $par = $all | Where-Object { $_.ProcessId -eq $ppid } | Select-Object -First 1
+            if ($par -and $par.CommandLine -and $par.CommandLine -match 'supervisor') { return }
+            try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; $killed++ } catch {}
+        }
+    } catch {}
+    if ($killed -gt 0) { Info "서버 $killed 개를 껐습니다. 옛 서버 창은 닫아도 됩니다." } else { Info '켜져 있는 서버가 없습니다.' }
+}
+
+# ── 2. 새 판 묶음 받기 ───────────────────────────────────────
+#   2026-10-02 방식을 뒤집었다. 전에는 '바꿀 파일 30개'를 손으로 적어 두었는데,
+#   새로 만든 파일을 그 목록에 적는 걸 잊으면 수강생에게 조용히 안 갔다
+#   (실측: 킷 100개 중 70개가 그 상태. 훅·settings.json·환경점검·직원견본 전부).
+#   이제는 **내가 만든 것만 지키고 나머지는 모두 새 판으로 바꾼다.**
+$protectFiles = @(
+    'slack-server\personas.py',
+    'slack-server\agent_channels.py'
+)
+$protectRe    = '(^|\\)(\.claude\\agents|\.claude\\skills|workspace|logs|backup|__pycache__|node_modules|\.git)(\\|$)'
+$protectNames = @('.env', '.agent_session.json', '.naver-state.json', '.dev.vars')
+
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$bak   = Join-Path $Kit "backup\update-$stamp"
+$tmp   = Join-Path $Root "90_TEMP\update-$stamp"
+$null  = New-Item -ItemType Directory -Path $tmp -Force
+
+Step '새 판 묶음 받기'
+$zipPath = Join-Path $tmp 'kit.zip'
+$ZipUrl  = "https://github.com/$Repo/archive/refs/heads/$Branch.zip"
+try { Invoke-WebRequest -Uri $ZipUrl -OutFile $zipPath -UseBasicParsing }
+catch { Fail "묶음을 못 받았습니다. 인터넷 또는 기관 방화벽(github.com)을 확인하세요.`n     ($($_.Exception.Message))" }
+Info ("묶음 {0:N0} KB" -f ((Get-Item -LiteralPath $zipPath).Length / 1KB))
+
+$ext = Join-Path $tmp 'ext'
+$null = New-Item -ItemType Directory -Path $ext -Force
+try { Expand-Archive -LiteralPath $zipPath -DestinationPath $ext -Force }
+catch { Fail "압축을 못 풀었습니다. ($($_.Exception.Message))" }
+
+$newKit = $null
+foreach ($d in @(Get-ChildItem -LiteralPath $ext -Directory)) {
+    $cand = Join-Path $d.FullName 'starter-kit'
+    if (Test-Path -LiteralPath $cand) { $newKit = $cand; break }
+}
+if (-not $newKit) { Fail '받은 묶음 안에 starter-kit 폴더가 없습니다.' }
+
+# 새 server.py 가 정말 새 판인지 (roster 를 쓰는지) 확인 — 캐시된 옛 파일이면 여기서 멈춘다
+$srvNew = Join-Path $newKit 'slack-server\server.py'
+if (-not (Test-Path -LiteralPath $srvNew)) { Fail '받은 묶음에 slack-server\server.py 가 없습니다.' }
+$srvText = Get-Content -LiteralPath $srvNew -Raw -Encoding UTF8
+if ($srvText -notmatch 'from roster import') { Fail '받은 server.py 가 새 판이 아닙니다. 잠시 후 다시 실행해 보세요.' }
+
+Step '지킬 것 빼고 바꿀 목록 만들기'
+$got  = @()
+$kept = @()
+foreach ($f in @(Get-ChildItem -LiteralPath $newKit -File -Recurse -Force)) {
+    $rel = $f.FullName.Substring($newKit.Length + 1)
+    $skip = $false
+    if ($protectFiles -contains $rel) { $skip = $true }
+    if (-not $skip -and $rel -match $protectRe) { $skip = $true }
+    if (-not $skip -and ($protectNames -contains $f.Name)) { $skip = $true }
+    if ($skip) { $kept += $rel } else { $got += $rel }
+}
+# 묶음이 깨졌는데 '0개 교체'로 조용히 끝나는 일을 막는다
+if ($got.Count -lt 20) { Fail "바꿀 파일이 $($got.Count)개뿐입니다 — 받은 묶음이 깨진 것 같습니다. 중단합니다." }
+Info ("바꿀 파일 {0}개 · 지킬 파일 {1}개" -f $got.Count, $kept.Count)
+
+# ── 3. 백업하고 바꿔 넣기 ────────────────────────────────────
+Step "바꾸기 전 파일 백업 → $bak"
+foreach ($rel in $got) {
+    $cur = Join-Path $Kit ($rel -replace '/', '\')
+    if (Test-Path -LiteralPath $cur) {
+        $b = Join-Path $bak ($rel -replace '/', '\')
+        $null = New-Item -ItemType Directory -Path (Split-Path $b) -Force
+        Copy-Item -LiteralPath $cur -Destination $b -Force
+    }
+}
+Step '엔진 파일 교체'
+foreach ($rel in $got) {
+    $src = Join-Path $newKit $rel
+    $dst = Join-Path $Kit ($rel -replace '/', '\')
+    $null = New-Item -ItemType Directory -Path (Split-Path $dst) -Force
+    Copy-Item -LiteralPath $src -Destination $dst -Force
+}
+Info ("{0}개 교체. 직원 · 스킬 · personas.py · agent_channels.py · .env · workspace 는 그대로입니다." -f $got.Count)
+try { Remove-Item -LiteralPath (Join-Path $Srv '__pycache__') -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+try { Remove-Item -LiteralPath $tmp -Recurse -Force } catch {}
+
+# ── 4. 어제 대화 끊기 ────────────────────────────────────────
+Step '어제 대화 지우기 (새 대화로 시작)'
+$sess = Join-Path $Srv '.agent_session.json'
+if (Test-Path -LiteralPath $sess) { Remove-Item -LiteralPath $sess -Force; Info '저장된 대화를 지웠습니다. 잘못 기억한 이름·옛 요청이 여기서 끊깁니다.' }
+else { Info '저장된 대화가 없습니다.' }
+
+# ── 5. 강사 이름이 내 설정에 들어가 있는지 ──────────────────
+Step '내 설정 파일에 카드 예시 이름(홍길동)이 섞여 있는지 살펴보기'
+$instructor = '홍길동'
+$suspects = @()
+$cands = @(
+    (Join-Path $env:USERPROFILE '.claude\CLAUDE.md'),
+    (Join-Path $Kit 'CLAUDE.md'),
+    (Join-Path $Kit 'workspace\memory\facts.md')
+)
+$memDir = Join-Path $env:USERPROFILE '.claude\projects'
+if (Test-Path -LiteralPath $memDir) {
+    # 클로드가 스스로 적어 둔 기억(memory\*.md)과 CLAUDE.md 만 본다. 대화 기록(.jsonl)은 보지 않는다
+    $cands += @(Get-ChildItem -LiteralPath $memDir -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -eq '.md' -and ($_.Name -eq 'CLAUDE.md' -or $_.DirectoryName -match '\\memory$') } |
+        Select-Object -ExpandProperty FullName)
+}
+$agentsDir = Join-Path $Kit '.claude\agents'
+if (Test-Path -LiteralPath $agentsDir) {
+    $cands += @(Get-ChildItem -LiteralPath $agentsDir -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+}
+foreach ($f in $cands) {
+    if ($f -and (Test-Path -LiteralPath $f)) {
+        try {
+            $t = Get-Content -LiteralPath $f -Raw -Encoding UTF8 -ErrorAction Stop
+            if ($t -and $t.Contains($instructor)) { $suspects += $f }
+        } catch {}
+    }
+}
+if ($suspects.Count -gt 0) {
+    Warn "아래 파일에 강사 이름($instructor)이 들어 있습니다. 내 이름이 맞는지 열어서 고치세요 (지우지는 않았습니다):"
+    $shown = @($suspects | Select-Object -First 8)
+    foreach ($f in $shown) { Warn "  $f" }
+    if ($suspects.Count -gt $shown.Count) { Warn ("  … 외 {0}개" -f ($suspects.Count - $shown.Count)) }
+} else { Info '없습니다.' }
+$facts = Join-Path $Kit 'workspace\memory\facts.md'
+if (-not (Test-Path -LiteralPath $facts)) {
+    Warn 'workspace\memory\facts.md 가 없습니다 — 카드 P1 을 먼저 하세요. 이 파일의 "이름:" 줄로 직원이 나를 알아봅니다.'
+}
+
+# ── 6. 확인 ──────────────────────────────────────────────────
+Step '확인 — py 점검.py 4'
+Push-Location $Kit
+try { & py -3 '점검.py' '4' | Out-Host } catch { Warn "점검을 못 돌렸습니다: $($_.Exception.Message)" }
+Pop-Location
+
+# ── 7. 서버 다시 켜기 ────────────────────────────────────────
+Step '슬랙 서버 켜기 — 이제 PC 를 껐다 켜도 저절로 뜹니다'
+if ($env:WD_NO_SERVER) {
+    Info '서버 자동 기동은 건너뜁니다 (WD_NO_SERVER). slack-server 폴더에서 직접:  py -3 -X utf8 server.py'
+} else {
+    $auto = Join-Path $Srv 'autostart.ps1'
+    if (Test-Path -LiteralPath $auto) {
+        try {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $auto -Enable -Quiet 2>&1 | ForEach-Object { Info $_ }
+            $sp = Join-Path $Srv 'logs\server.pid'
+            $sid = $null
+            if (Test-Path -LiteralPath $sp) { $sid = (Get-Content -LiteralPath $sp -ErrorAction SilentlyContinue | Select-Object -First 1) -as [int] }
+            if ($sid -and (Get-Process -Id $sid -ErrorAction SilentlyContinue)) {
+                Info "서버가 켜졌습니다 (PID $sid). 검은 창은 뜨지 않습니다 — 닫을 창도 없습니다."
+            } else {
+                Warn '자동시작 등록은 됐지만 서버가 아직 안 올라왔습니다. 스타터킷 폴더의 자동시작_켜기.bat 을 한 번 눌러 보세요.'
+            }
+        } catch { Warn "자동시작 등록에 실패했습니다: $($_.Exception.Message)" }
+    } else {
+        # 옛 킷이라 autostart.ps1 을 못 받은 경우의 대비책
+        try {
+            Start-Process -FilePath "$env:ComSpec" -ArgumentList '/k', 'chcp 65001 >nul & py -3 -X utf8 server.py' -WorkingDirectory $Srv
+            Info '새 검은 창에 "✅ 준비 완료" 가 뜨면 됩니다. 그 창은 닫지 마세요.'
+        } catch { Warn "서버를 자동으로 못 켰습니다. slack-server 폴더에서 직접:  py -3 -X utf8 server.py" }
+    }
+}
+
+Write-Host ''
+Write-Host '  ✅ 업데이트 끝. 이제 이렇게 하세요' -ForegroundColor Green
+Info '1) 슬랙 DM에  새 대화  라고 치세요 → "새 대화로 시작합니다. ○○ 대표님" 에 내 이름이 나오면 성공'
+Info '2) 직원을 찍어 부르려면 문장 맨 앞에 이름:  회의록대리 불러서 ○○ 해줘  /  @팀장 …'
+Info '3) 이름·아이콘·인사말을 아직 안 정했으면 클로드에서 카드 P8(새 판)을 한 번 더 붙여넣으세요'
+Info '   → 점검 결과에 ❌ 인사말 빈칸 이 떴다면 이게 그 처방입니다'
+Info "백업: $bak"
+Write-Host ''
+Write-Host '  이 창은 닫아도 됩니다.' -ForegroundColor DarkGray
+}

@@ -1,0 +1,222 @@
+﻿<#
+  install_starterkit.ps1
+
+  더블클릭 설치용 본체.
+  - C:\AgentOffice 표준 구조를 만든다.
+  - MyData\Report·Minutes·Track(보고서·회의록·직무 문서) 폴더를 만들어 수강생이 미리 비식별 양식을 넣을 자리를 준다.
+  - MyData\Skill 은 이미 클로드를 써 온 수강생이 "쓰던 내 스킬(SKILL.md)"을 그대로 가져오는 자리다.
+    2026-09-16 신설. 그전에는 받아올 자리가 없어서, 이미 잘 쓰던 스킬이 있는 사람도
+    수업에서 만든 뼈대 스킬로 새로 시작해야 했다.
+  - 현재 스타터킷을 01_KIT\starter-kit 으로 복사한다.
+  - 이동을 느리게 하는 node_modules 및 재생성 파일은 복사하지 않는다.
+  - 실제 비밀키와 로그인 상태는 복사하지 않는다.
+  - 기존 설치가 있으면 덮어쓰지 않는다.
+  - 끝나면 묻지 않고 환경점검(env_check.ps1)으로 넘어간다 — 프로그램·파이썬 3.14·꾸러미·슬랙 열쇠까지 자동.
+#>
+[CmdletBinding()]
+param(
+    [string]$InstallRoot = 'C:\AgentOffice',
+    [switch]$NoOpen,
+    [switch]$SkipEnvironmentCheck
+)
+
+$ErrorActionPreference = 'Stop'
+try {
+    $null = & "$env:ComSpec" /c chcp 65001
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    [Console]::InputEncoding = [Text.Encoding]::UTF8
+} catch {}
+
+try { $Host.UI.RawUI.WindowTitle = 'gplatform AI 에이전트팀 (직장인판) — 폴더 생성 및 설치' } catch {}
+# 파워셸 창에서 claude 한 단어로 부를 수 있게 사용자 범위 실행 정책을 풀어 둔다 (회사 정책이면 조용히 실패)
+try { if ((Get-ExecutionPolicy -Scope CurrentUser) -notin 'RemoteSigned','Unrestricted','Bypass') { Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop } } catch {}
+
+$sourceKit = Split-Path -Parent $MyInvocation.MyCommand.Path
+$targetRoot = [IO.Path]::GetFullPath($InstallRoot)
+$targetKit = Join-Path $targetRoot '01_KIT\starter-kit'
+$marker = Join-Path $targetKit '환경점검.bat'
+$logFile = Join-Path $targetRoot '설치결과.txt'
+
+function Write-Step([string]$Text) {
+    Write-Host ''
+    Write-Host "  ▶ $Text" -ForegroundColor Magenta
+}
+
+function Write-Info([string]$Text) {
+    Write-Host "     $Text" -ForegroundColor DarkGray
+}
+
+function Stop-WithMessage([string]$Text) {
+    Write-Host ''
+    Write-Host "  ❌ $Text" -ForegroundColor Red
+    Write-Host ''
+    $null = Read-Host '  이 창을 닫으려면 Enter'
+    exit 1
+}
+
+Write-Host ''
+Write-Host '  gplatform AI 에이전트팀 (직장인판) — 폴더 생성 및 설치' -ForegroundColor Magenta
+Write-Host "  설치 위치: $targetRoot" -ForegroundColor DarkGray
+
+# ZIP 내부에서는 옆 파일을 안정적으로 읽지 못하므로 먼저 압축을 풀게 한다.
+if (-not (Test-Path -LiteralPath (Join-Path $sourceKit 'env_check.ps1'))) {
+    Stop-WithMessage '스타터킷이 완전히 풀리지 않았습니다. ZIP에서 모두 압축 풀기 후 다시 실행하세요.'
+}
+
+Write-Step '표준 폴더 만들기'
+$folders = @(
+    '00_README',
+    '01_KIT',
+    '02_INSTALLERS\Node22',
+    '02_INSTALLERS\Python',
+    '02_INSTALLERS\Git',
+    '03_OFFLINE_PACKAGES',
+    '04_LEARNER_BACKUP',
+    '05_EXPORT\html',
+    '05_EXPORT\pdf',
+    '90_TEMP',
+    'MyData\Report',
+    'MyData\Minutes',
+    'MyData\Track',
+    'MyData\Skill'
+)
+
+try {
+    foreach ($relative in $folders) {
+        $path = Join-Path $targetRoot $relative
+        $null = New-Item -ItemType Directory -Path $path -Force
+    }
+} catch {
+    Stop-WithMessage "C: 드라이브에 폴더를 만들 수 없습니다. 기관 보안정책 또는 권한을 확인하세요. ($($_.Exception.Message))"
+}
+Write-Info "$($folders.Count)개 표준 폴더 확인"
+
+# MyData 안내문 — 수강생이 수업 전에 뭘 어디에 넣을지
+$guide = Join-Path $targetRoot 'MyData\여기에_넣으세요.txt'
+if (-not (Test-Path -LiteralPath $guide)) {
+    @(
+        '내 양식 폴더 — 수업 전에 미리 넣어 두세요 (비식별 사본만)',
+        '',
+        '  Report\    보고서 — 내가 쓴 주간보고·업무보고 3개 (docx·pptx·pdf·hwp·txt)',
+        '  Minutes\   회의록 — 내가 정리한 회의록 3개',
+        '  Track\     직무 문서 — (선택) 제안서·블로그 글·안내문·기획서·비용표 중 3개',
+        '  Skill\     내 스킬 — (선택) 이미 쓰던 스킬 문서(SKILL.md). 있으면 이것이 우선입니다',
+        '',
+        '[중요] 회사 원본을 그대로 넣지 마세요. 사본을 만들어 회사 이름·사람 이름·고객사·금액을',
+        '○○ 로 지운 뒤 넣습니다. 구성과 말투만 남아 있으면 충분합니다.',
+        '회사 규정상 사본도 가져올 수 없으면 빈 양식(제목과 항목 이름만)을 손으로 적어 넣으세요.',
+        '',
+        '폴더 이름이 영문인 이유: 프로그램이 한글 경로에서 드물게 막히는 일을 없애기 위해서입니다.',
+        '직원(AI)은 이 폴더를 읽기만 하고 원본을 고치지 않습니다.',
+        '없는 것은 비워 두어도 수업은 진행됩니다. 부록 A(내 양식)를 할 때 채우면 됩니다.',
+        '',
+        '[Skill 폴더] 클로드를 이미 써 오셨다면, 쓰시던 SKILL.md 를 여기에 넣어 주세요.',
+        '같은 일을 하는 스킬이 수업에도 있으면 쓰시던 것이 정본이 되고,',
+        '수업에서 만든 것은 보관 폴더로 물러납니다. 처음이시면 비워 두세요.'
+    ) | Set-Content -LiteralPath $guide -Encoding UTF8
+}
+Write-Info "MyData 안내문: $guide"
+
+Write-Step '가벼운 스타터킷 설치'
+if (Test-Path -LiteralPath $marker) {
+    # 2026-09-16: 예전에는 "덮어쓰지 않았습니다" 한 줄만 조용히 찍고 "설치 완료" 로 끝났다.
+    # 재수강생이 이 한 줄 설치를 돌리면 엔진은 옛 판 그대로인데 성공한 줄 알고 수업에 들어왔다.
+    # 2026-10-19: 업데이트(update.ps1) 안내는 없앴다. 처음 설치하는 사람 기준으로만 안내한다.
+    $script:KitAlreadyExisted = $true
+    Write-Host ''
+    Write-Host '  ⚠ 이미 설치돼 있습니다 — 내 직원·스킬·슬랙 열쇠를 지키려고 그대로 두고 이어서 진행합니다.' -ForegroundColor Yellow
+    Write-Info $targetKit
+    Write-Host ''
+} else {
+    $excludedDirs = @(
+        (Join-Path $sourceKit '__pycache__'),
+        (Join-Path $sourceKit 'slack-server\__pycache__'),
+        (Join-Path $sourceKit 'slack-server\logs'),
+        (Join-Path $sourceKit 'naver-blog\logs'),
+        (Join-Path $sourceKit 'naver-blog\.naver-profile'),
+        (Join-Path $sourceKit '.image-flow-profile'),
+        (Join-Path $sourceKit 'backup')
+    )
+
+    $copyArgs = @(
+        $sourceKit,
+        $targetKit,
+        '/E',
+        '/R:1',
+        '/W:1',
+        '/XJ',
+        '/COPY:DAT',
+        '/DCOPY:DAT',
+        '/NP',
+        '/XD'
+    ) + $excludedDirs + @(
+        '/XF',
+        '.env',
+        '.agent_session.json',
+        '.naver-state.json',
+        '환경점검_결과.html',
+        '*.pyc',
+        '*.log',
+        '*.bak',
+        '*.bak_*',
+        '*.bak-*'
+    )
+
+    & robocopy @copyArgs | Out-Null
+    $copyCode = $LASTEXITCODE
+    if ($copyCode -gt 7) {
+        Stop-WithMessage "스타터킷 복사에 실패했습니다. robocopy 종료코드: $copyCode"
+    }
+    if (-not (Test-Path -LiteralPath $marker)) {
+        Stop-WithMessage '복사가 끝났지만 환경점검.bat을 찾지 못했습니다. 원본 ZIP을 다시 받으세요.'
+    }
+
+    # ZIP 은 빈 폴더를 담지 못한다 — 직원·스킬·inbox·memory 자리는 여기서 다시 판다 (환경점검 '스타터킷 폴더 구조' 항목)
+    foreach ($d in @('.claude\agents', '.claude\skills', 'workspace\inbox', 'workspace\memory', 'workspace\결과물', 'workspace\기록', 'workspace\받은파일', 'slack-server\logs')) {
+        $null = New-Item -ItemType Directory -Path (Join-Path $targetKit $d) -Force
+    }
+
+    $installedFiles = Get-ChildItem -LiteralPath $targetKit -File -Force -Recurse
+    $installedBytes = ($installedFiles | Measure-Object Length -Sum).Sum
+    Write-Host '  ✅ 스타터킷 복사 성공' -ForegroundColor Green
+    Write-Info ("{0}개 파일 / {1:N1}MB" -f $installedFiles.Count, ($installedBytes / 1MB))
+}
+
+$readmeSource = Join-Path $targetKit 'README.md'
+$readmeTarget = Join-Path $targetRoot '00_README\스타터킷_README.md'
+if ((Test-Path -LiteralPath $readmeSource) -and -not (Test-Path -LiteralPath $readmeTarget)) {
+    Copy-Item -LiteralPath $readmeSource -Destination $readmeTarget
+}
+
+$logLines = @(
+    "설치일시=$([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss'))",
+    "원본=$sourceKit",
+    "설치위치=$targetKit",
+    '제외=node_modules, dist, .wrangler, cache, logs, .env, login profiles',
+    '다음단계=01_KIT\starter-kit\환경점검.bat'
+)
+$logLines | Set-Content -LiteralPath $logFile -Encoding UTF8
+
+Write-Step '설치 결과'
+if ($script:KitAlreadyExisted) {
+    Write-Host "  ✅ 이미 설치된 스타터킷을 그대로 씁니다" -ForegroundColor Green
+} else {
+    Write-Host "  ✅ 표준 폴더와 스타터킷 준비됨" -ForegroundColor Green
+}
+Write-Info "스타터킷: $targetKit"
+Write-Info "기록: $logFile"
+Write-Info "내 양식(선택): $(Join-Path $targetRoot 'MyData') — Report·Minutes 에 보고서 3·회의록 3 (이름·숫자를 지운 사본)"
+Write-Info "쓰던 스킬이 있으면: $(Join-Path $targetRoot 'MyData\Skill') 에 SKILL.md 를 넣으면 그것이 우선 적용됩니다"
+
+if (-not $NoOpen) {
+    try { Start-Process explorer.exe -ArgumentList "`"$targetRoot`"" } catch {}
+}
+
+# 2026-09-07: 묻지 않고 바로 환경점검으로 넘어간다. 프로그램 설치·파이썬 3.14·꾸러미·슬랙 열쇠까지 거기서 끝낸다.
+if (-not $SkipEnvironmentCheck) {
+    Write-Step '이어서 환경점검·자동 설치를 시작합니다 (묻지 않습니다)'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $targetKit 'env_check.ps1') | Out-Host
+}
+
+Write-Host ''
+Write-Host '  이 창은 닫아도 됩니다.' -ForegroundColor DarkGray

@@ -1,0 +1,21 @@
+# 🔒 비밀 — 절대 올리지 마세요
+.env
+.env.local
+slack-server/.env
+naver-blog/.env
+naver-blog/.naver-state.json
+naver-blog/.naver-profile/
+.image-flow-profile/
+
+# 실행 중 생기는 것
+환경점검_결과.html
+logs/
+slack-server/logs/
+naver-blog/logs/
+__pycache__/
+*.pyc
+
+# 슬랙 대화 세션 (내 PC 에만)
+.agent_session.json
+slack-server/.agent_session.json
+mail/.env

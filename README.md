@@ -1,0 +1,64 @@
+# gplatform AI 에이전트팀 (직장인판) — 스타터킷
+
+「에이전트팀 만들기 과정 · 직장인판」 수강생용 스타터킷입니다. 내 반복 업무(주간보고 · 회의록 · 데이터 집계 · 메일 · 조사)를 덜어 줄
+**AI 보조 팀 5명**에, 내 직무(영업 · 마케팅 · 인사 · 기획 · 관리) 직원 1명을 더해 하루 만에 만듭니다.
+회사 자료 없이 **가상 회사 실습자료**로 연습하고, 개인 PC 에 설치합니다.
+
+프로그램을 내려받아 설치하는 게 아니라, **명령어 한 줄**로 설치합니다.
+
+## 설치 (한 줄)
+
+1. 시작 메뉴에서 **PowerShell** 을 엽니다. (Windows PowerShell / 관리자 권한 필요 없음)
+2. 아래 한 줄을 붙여넣고 Enter. (붙여넣기는 **마우스 오른쪽 클릭**)
+
+```powershell
+irm https://raw.githubusercontent.com/gplatforman-hub/gplat_agentteam_kit/main/install.ps1 | iex
+```
+
+**CMD 창밖에 안 열리면**(줄 맨 앞에 `PS` 가 없으면) 아래 한 줄을 대신 붙여넣습니다. 파워셸을 잠깐 빌려 똑같이 설치합니다.
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/gplatforman-hub/gplat_agentteam_kit/main/install.ps1 | iex"
+```
+
+## 이 한 줄이 하는 일
+
+| 단계 | 내용 | 걸리는 시간 |
+|---|---|---|
+| 1 | 깃허브에서 스타터킷을 받는다 (약 3MB, `node_modules`·비밀키 없음) | 수 초 |
+| 2 | `C:\AgentOffice\01_KIT\starter-kit` 에 표준 설치한다. `C:\AgentOffice\MyData\` 도 같이 만든다 | 수 초 |
+| 3 | 환경점검을 이어서 돌린다 — Node·Git·Python·Claude Code 가 없으면 **명령어(winget/npm)로 설치** | 없는 것에 따라 몇 분 |
+
+기존 설치가 있으면 덮어쓰지 않습니다. 인터넷이 켜져 있어야 합니다.
+
+## 설치 후
+
+- `C:\AgentOffice\01_KIT\starter-kit\README.md` — 폴더 설명과 카드 사용법
+- `C:\AgentOffice\MyData\` — **내 보고서 3개·회의록 3개(비식별 사본)** 를 수업 전에 넣어 두는 곳 (`Report\` 보고서 · `Minutes\` 회의록 · `Track\` 직무 문서 · `Skill\` 내 스킬)
+- `프롬프트카드.md` — 강의장에서 모듈 0~6 순서대로
+
+## 이 저장소에 없는 것
+
+`.env`(슬랙 열쇠), 로그인 상태, `node_modules`, 캐시·로그는 들어 있지 않습니다. 보안상 정상입니다.
+
+---
+gplatform 교육용 (직장인판) · `starter-kit/` 원본은 강사 PC에서 관리합니다.
+
+---
+
+## 저작권
+
+© 2026 **gplatform**. All rights reserved.
+
+「에이전트팀 만들기 과정」 수강생용 자료입니다. **본인 업무에는 마음껏 쓰십시오** —
+고쳐 쓰셔도 되고, 이걸로 만든 제안서·교재·블로그 글을 상업적으로 쓰셔도 됩니다.
+
+다만 아래는 **사전 서면 허락이 필요합니다.**
+
+- 스타터킷을 제3자에게 배포·공유하는 것 (원본이든 고친 것이든)
+- 이 자료로 교육·강의·워크숍·컨설팅을 제공하는 것
+- 교안·프롬프트 카드를 복제·전재·2차 저작하는 것
+
+> 공개 저장소에 올려둔 것은 **수강생의 한 줄 설치를 위한 것**이며, 누구나
+> 재배포해도 된다는 뜻이 아닙니다. 자세한 내용은 [LICENSE](LICENSE) 를 보세요.
+> 재배포·협업을 원하시면 연락 주십시오 — 막으려는 게 아니라 **이야기하고 쓰자**는 뜻입니다.
