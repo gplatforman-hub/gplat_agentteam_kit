@@ -9,7 +9,7 @@
     (같은 PC 의 다른 서버), 이름으로 고르면 그쪽이 죽는다.
     감시기가 logs\server.pid / logs\supervisor.pid 에 적어둔 PID 만 본다.
 #>
-# -Quiet : 환경점검이 부를 때. 마지막에 Enter 를 기다리지 않는다.
+# -Quiet : 환경점검·Code 탭이 부를 때. Enter 를 기다리지 않고, 열쇠 창도 묻지 않는다.
 param([switch]$Enable, [switch]$Disable, [switch]$Quiet)
 
 try {
@@ -68,7 +68,22 @@ if (-not (Test-Path -LiteralPath $vbs)) {
     Write-Host ''; Pause-IfInteractive; exit 1
 }
 if (-not (Test-Path -LiteralPath (Join-Path $dir '.env'))) {
-    Say '❌ slack-server\.env 가 없습니다. 환경점검.bat 으로 슬랙 열쇠부터 넣어주세요.' 'Red'
+    # 2026-11-03: 열쇠가 없으면 막다른 길 대신 슬랙열쇠_넣기.bat 으로 바로 잇는다. 그 창이 열쇠 → 연결 시험 → 서버 → 자동시작까지 한다.
+    Say '❌ 슬랙 열쇠가 아직 없습니다 (slack-server\.env 없음).' 'Red'
+    Write-Host ''
+    Say '슬랙열쇠_넣기.bat 으로 열쇠를 넣으면 서버도 저절로 켜집니다. 메모장에 모아 둔 세 줄을 열어 두세요.' 'Yellow'
+    Say '  묻는 순서: ① 앱 토큰 xapp-  ② 봇 토큰 xoxb-  ③ 내 멤버 ID U…  ④ 내 이름(한글)' 'Gray'
+    Say '  메모장에서 한 줄 복사 → 열쇠 창에서 마우스 오른쪽 클릭(붙여넣기) → Enter. 별표로 가려 보이면 정상입니다.' 'Gray'
+    $keyBat = Join-Path (Split-Path -Parent $dir) '슬랙열쇠_넣기.bat'
+    if (-not $Quiet -and (Test-Path -LiteralPath $keyBat)) {
+        Write-Host ''
+        $a = Read-Host '  ? 지금 열쇠 넣기 창을 열까요? (Enter = 예, n = 아니오)'
+        if ("$a".Trim().ToLower() -ne 'n') {
+            Start-Process -FilePath $keyBat
+            Say '✔ 열쇠 넣기 창을 열었습니다. 그 창에서 이어서 진행하세요. 이 창은 닫아도 됩니다.' 'Green'
+            exit 0
+        }
+    }
     Write-Host ''; Pause-IfInteractive; exit 1
 }
 
@@ -119,7 +134,7 @@ if ($ok) {
 }
 elseif ($serverPid) {
     Say '⚠ 서버가 떴다가 바로 꺼졌습니다 — 거의 틀림없이 슬랙 열쇠 문제입니다.' 'Yellow'
-    Say '  환경점검.bat 을 다시 눌러 열쇠 3개(xoxb-, xapp-, 내 아이디)를 확인해 주세요.' 'Yellow'
+    Say '  슬랙열쇠_넣기.bat 을 다시 눌러 메모장의 세 줄(xapp-, xoxb-, 멤버 ID)을 다시 넣어 주세요.' 'Yellow'
     Say '  자동시작 등록은 그대로 남겨둡니다 — 열쇠를 고치면 그때부터 저절로 뜹니다.' 'DarkGray'
 } else {
     Say '⚠ 25초 안에 서버가 올라오지 않았습니다. logs\launcher.log 와 logs\server.log 를 확인해 주세요.' 'Yellow'
