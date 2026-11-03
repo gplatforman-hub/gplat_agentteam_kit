@@ -676,12 +676,17 @@ function Test-Server {
     $out = [IO.Path]::GetTempFileName(); $err = [IO.Path]::GetTempFileName()
     $p = $null; $ok = $false; $d = '90초 안에 "준비 완료" 가 뜨지 않음'
     try {
-        $p = Start-Process -FilePath $pyexe -ArgumentList '-X', 'utf8', 'server.py' -WorkingDirectory $srv -RedirectStandardOutput $out -RedirectStandardError $err -NoNewWindow -PassThru
+        $p = Start-Process -FilePath $pyexe -ArgumentList '-u', '-X', 'utf8', 'server.py' -WorkingDirectory $srv -RedirectStandardOutput $out -RedirectStandardError $err -NoNewWindow -PassThru
         $null = $p.Handle
         $deadline = (Get-Date).AddSeconds(90)
         while ((Get-Date) -lt $deadline) {
             Start-Sleep -Seconds 3
-            $txt = ''; try { $txt = [IO.File]::ReadAllText($out, [Text.Encoding]::UTF8) + [IO.File]::ReadAllText($err, [Text.Encoding]::UTF8) } catch {}
+            # 2026-11-03: 서버가 출력 파일을 열고 있어 ReadAllText 는 늘 '사용 중' 으로 실패했다(빈 문자열 → 90초 뒤 ❌).
+            #   공유 읽기로 연다. -u 는 출력이 버퍼에 묶이지 않게 한다.
+            $txt = ''
+            foreach ($f in @($out, $err)) {
+                try { $fs = [IO.File]::Open($f, 'Open', 'Read', 'ReadWrite'); $sr = New-Object IO.StreamReader($fs, [Text.Encoding]::UTF8); $txt += $sr.ReadToEnd(); $sr.Close() } catch {}
+            }
             if ($txt -match '준비 완료') { $ok = $true; $d = ($txt -split "`r?`n" | Where-Object { $_ -match '준비 완료' } | Select-Object -First 1).Trim(); break }
             if ($txt -match '❌|Error|Traceback') { $d = (($txt -split "`r?`n" | Where-Object { $_ -match '❌|Error' } | Select-Object -First 1)); if (-not $d) { $d = '오류로 종료' }; break }
             if ($p.HasExited) { $d = "서버가 바로 꺼짐 (종료코드 $($p.ExitCode))"; break }
