@@ -24,6 +24,7 @@ py -3 naver_draft.py login --blog-id 내블로그아이디
 ```
 
 `내블로그아이디`는 본인 블로그 주소(`blog.naver.com/이아이디`)의 그 부분입니다.
+login 이 성공하면 아이디를 `.blog-id` 에 기억합니다. 그다음부터 check · draft 에는 `--blog-id` 를 빼도 됩니다.
 로그인이 확인되면 세션이 `.naver-state.json` 에 저장됩니다.
 
 🔒 **`.naver-state.json` 은 로그인 토큰입니다.** 이 파일이 유출되면 로그인 없이도
@@ -33,19 +34,19 @@ py -3 naver_draft.py login --blog-id 내블로그아이디
 세션이 살아있는지 확인:
 
 ```
-py -3 naver_draft.py check --blog-id 내블로그아이디
+py -3 naver_draft.py check
 ```
 
 ## 3. 임시저장
 
 ```
-py -3 naver_draft.py draft --blog-id 내블로그아이디 --title "제목" --body-file 원고.md
+py -3 naver_draft.py draft --title "제목" --body-file 원고.md
 ```
 
 이미지를 직접 지정하려면:
 
 ```
-py -3 naver_draft.py draft --blog-id 내블로그아이디 --title "제목" --body-file 원고.md \
+py -3 naver_draft.py draft --title "제목" --body-file 원고.md \
   --images "img1.png,img2.png"
 ```
 

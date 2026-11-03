@@ -4,9 +4,10 @@ Claude in Chrome 확장은 blog.naver.com 을 허용하지 않으므로, 전용 
 프로필을 Playwright로 직접 구동한다. 평소 쓰는 브라우저는 건드리지 않는다.
 
   py -3.14 naver_draft.py login --blog-id 내블로그아이디   # 1회: 사람이 직접 로그인 (세션 저장)
-  py -3.14 naver_draft.py check --blog-id 내블로그아이디   # 세션 살아있는지 확인
+  py -3.14 naver_draft.py check                          # 세션 살아있는지 확인 (아이디는 login 때 기억)
   py -3.14 naver_draft.py probe --blog-id 내블로그아이디   # 에디터 DOM 구조 덤프 (셀렉터 조사용)
-  py -3.14 naver_draft.py draft --blog-id 내블로그아이디 --title "제목" --body-file post.md
+  py -3.14 naver_draft.py draft --title "제목" --body-file post.md
+  (--blog-id 를 붙이면 그 아이디를 쓴다. 기억은 login 이 성공했을 때만 바뀐다)
 
 설계 원칙
   - 로그인은 절대 자동화하지 않는다. 비밀번호를 코드가 만지지 않는다.
@@ -35,7 +36,9 @@ PROFILE_DIR = BASE / ".naver-profile"
 # ⚠ 이 파일은 로그인 토큰이다. 유출되면 계정 접근이 가능하니 PC 밖으로 내보내지 말 것.
 STATE_FILE = BASE / ".naver-state.json"
 SHOT_DIR = BASE / "logs" / "naver_shots"
-# main() 에서 --blog-id 로 채운다. 빈 채로 두면 아무 페이지도 못 연다.
+# login 이 성공하면 --blog-id 를 여기 적어 두고, 다음부터는 빼도 이걸 쓴다 (슬랙에서 매번 아이디를 묻지 않게)
+BLOG_ID_FILE = BASE / ".blog-id"
+# main() 에서 --blog-id(없으면 .blog-id)로 채운다. 빈 채로 두면 아무 페이지도 못 연다.
 BLOG_ID = ""
 WRITE_URL = ""
 BLOG_URL = ""
@@ -836,8 +839,8 @@ def cmd_draft(title: str, body: str, headless: bool, images=None) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="네이버 블로그 임시저장")
     ap.add_argument("mode", choices=["login", "check", "probe", "draft", "publish"])
-    ap.add_argument("--blog-id", required=True,
-                    help="네이버 블로그 아이디 (blog.naver.com/<이 아이디>). 본인 블로그 주소에서 확인")
+    ap.add_argument("--blog-id", default="",
+                    help="네이버 블로그 아이디 (blog.naver.com/<이 아이디>). login 때 한 번 넣으면 기억한다")
     ap.add_argument("--open-type", default="전체공개",
                     choices=["전체공개", "이웃공개", "서로이웃공개", "비공개"])
     ap.add_argument("--confirm", action="store_true",
@@ -859,12 +862,22 @@ def main() -> int:
     a = ap.parse_args()
 
     global BLOG_ID, WRITE_URL, BLOG_URL
-    BLOG_ID = a.blog_id
+    BLOG_ID = a.blog_id.strip()
+    if not BLOG_ID and BLOG_ID_FILE.is_file():
+        BLOG_ID = BLOG_ID_FILE.read_text(encoding="utf-8").strip()
+        log(f"블로그 아이디: {BLOG_ID} (login 때 기억해 둔 것)")
+    if not BLOG_ID:
+        log("블로그 아이디를 모릅니다. 처음 1회 login 에 --blog-id 내블로그아이디 를 붙여 실행하세요.")
+        return 1
     WRITE_URL = f"https://blog.naver.com/{BLOG_ID}?Redirect=Write"
     BLOG_URL = f"https://blog.naver.com/{BLOG_ID}"
 
     if a.mode == "login":
-        return cmd_login(a.headless)
+        rc = cmd_login(a.headless)
+        if rc == 0:
+            BLOG_ID_FILE.write_text(BLOG_ID + "\n", encoding="utf-8")
+            log(f"블로그 아이디 기억: {BLOG_ID} — 다음부터 --blog-id 는 빼도 됩니다.")
+        return rc
     if a.mode == "check":
         return cmd_check(a.headless)
     if a.mode == "probe":

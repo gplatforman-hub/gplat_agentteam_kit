@@ -4,6 +4,7 @@
 slack-server/.env
 naver-blog/.env
 naver-blog/.naver-state.json
+naver-blog/.blog-id
 naver-blog/.naver-profile/
 .image-flow-profile/
 
