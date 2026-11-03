@@ -8,16 +8,16 @@ description: 대표(나)의 개인 메일(네이버·다음·지메일)을 읽�
 ## 언제 쓰나
 
 대표가 메일함을 열어 보라고 하거나, 문의가 왔는지 묻거나, 답장을 써 달라고 하거나, 보내 달라고 할 때.
-스크립트는 `mail/` 폴더에 있고, 실행은 **스타터킷 루트에서** `py -3.14 mail\스크립트.py …` 형태로 한다.
+스크립트는 `mail/` 폴더에 있고, 실행은 **스타터킷 루트에서** `py -3.14 mail/스크립트.py …` 형태로 한다.
 
 | 대표의 말 | 실행 |
 |---|---|
-| "메일 연동 됐어?", "메일 점검" | `py -3.14 mail\mail_check.py` |
-| "새 메일 있어?", "메일 읽어줘" | `py -3.14 mail\mail_read.py --count 10` |
-| "안 읽은 메일만" | `py -3.14 mail\mail_read.py --unseen` |
-| "문의 메일 확인" | `py -3.14 mail\mail_read.py --count 30` → 📌문의 붙은 것만 추린다 |
-| "이번 주 메일" | `py -3.14 mail\mail_read.py --since 2026-09-01` (월요일 날짜로) |
-| "○○ 관련 메일 찾아줘" | `py -3.14 mail\mail_read.py --search ○○` |
+| "메일 연동 됐어?", "메일 점검" | `py -3.14 mail/mail_check.py` |
+| "새 메일 있어?", "메일 읽어줘" | `py -3.14 mail/mail_read.py --count 10` |
+| "안 읽은 메일만" | `py -3.14 mail/mail_read.py --unseen` |
+| "문의 메일 확인" | `py -3.14 mail/mail_read.py --count 30` → 📌문의 붙은 것만 추린다 |
+| "이번 주 메일" | `py -3.14 mail/mail_read.py --since 2026-09-01` (월요일 날짜로) |
+| "○○ 관련 메일 찾아줘" | `py -3.14 mail/mail_read.py --search ○○` |
 | "회신 써줘", "답장 초안" | 읽기 → 초안 파일 저장 → `mail_send.py` **--approved 없이** 실행해 초안 확인 |
 | "보내" (명시적 지시) | `mail_send.py … --approved` |
 
@@ -28,7 +28,7 @@ description: 대표(나)의 개인 메일(네이버·다음·지메일)을 읽�
 ### 1. 점검 (처음 한 번, 또는 오류가 날 때)
 
 ```
-py -3.14 mail\mail_check.py
+py -3.14 mail/mail_check.py
 ```
 `OK: naver hong@naver.com IMAP ✅ SMTP ✅` 가 나오면 된 것. `FAIL:` 이면 그 줄의 "→ 해결" 을 대표에게 그대로 전한다.
 `[mail] mail/.env 가 없습니다` 가 나오면 `mail/README.md` 의 "앱 비밀번호 받는 법"을 안내한다. **비밀번호를 대신 물어보지 않는다** — 대표가 `mail/.env` 에 직접 넣는다.
@@ -36,7 +36,7 @@ py -3.14 mail\mail_check.py
 ### 2. 읽기
 
 ```
-py -3.14 mail\mail_read.py --count 10
+py -3.14 mail/mail_read.py --count 10
 ```
 - 읽어도 메일함의 "안 읽음" 표시는 그대로다. 마음 놓고 여러 번 봐도 된다.
 - 결과를 대표에게 전할 때는 **번호 · 날짜 · 보낸 사람 · 제목** 한 줄씩. 본문은 묻기 전엔 요약 한 줄까지만.
@@ -75,14 +75,14 @@ py -3.14 mail\mail_read.py --count 10
 2. 초안을 `workspace/결과물/<날짜>_<보낸사람>_회신초안.md` 로 저장한다. (`ko-instructor-email` 스킬이 있으면 그 문체로)
 3. 아래처럼 **`--approved` 없이** 실행해 화면에 초안을 띄운다. 종료 코드 2 가 정상이다 — 보내지 않았다는 뜻이다.
    ```
-   py -3.14 mail\mail_send.py --to 상대주소 --subject "Re: 원제목" --body-file workspace\결과물\<날짜>_<보낸사람>_회신초안.md
+   py -3.14 mail/mail_send.py --to 상대주소 --subject "Re: 원제목" --body-file workspace/결과물/<날짜>_<보낸사람>_회신초안.md
    ```
 4. 대표에게 "초안 저장했습니다. 보낼까요?" 한 줄. 여기서 멈춘다.
 
 ### 5. 보내기 — 대표가 "보내"라고 했을 때만
 
 ```
-py -3.14 mail\mail_send.py --to 상대주소 --subject "Re: 원제목" --body-file … --approved
+py -3.14 mail/mail_send.py --to 상대주소 --subject "Re: 원제목" --body-file … --approved
 ```
 - `--approved` 는 대표가 **본문을 보고 "보내"라고 말한 그 건**에만 붙인다. "좋아", "괜찮네" 는 승인이 아니다.
 - 끝나면 `SENT: 주소 / 제목` 한 줄이 나온다. 그걸 그대로 보고한다.
