@@ -609,8 +609,9 @@ function Read-Secret([string]$label, [string]$head) {
     }
 }
 
-function Fix-Slack {
-    if (Is-Ok 'slack') { return }
+function Fix-Slack([switch]$Force) {
+    # -Force : 열쇠 모양이 맞아도 다시 묻는다. 모양만 맞고 값이 틀린 열쇠를 고칠 길이 없던 문제 (2026-11-03)
+    if ((Is-Ok 'slack') -and -not $Force) { return }
     if ($SkipSlack -or $SkipLogin) { Write-Info '(-SkipSlack) 슬랙 열쇠 입력 생략'; return }
     $srv = Join-Path $KIT 'slack-server'
     $envf = Join-Path $srv '.env'
@@ -972,11 +973,19 @@ if ($SlackOnly) {
     if (-not (Is-Ok 'python') -or -not (Is-Ok 'pypkg')) { Write-Warn '설치가 덜 끝났습니다. 환경점검.bat 을 먼저 실행하세요.' }
     Write-Step '2/3 슬랙 열쇠 넣기 · 연결 시험'
     Check-SlackEnv | Out-Null
-    Fix-Slack
-    Test-SlackLive
+    if ((Is-Ok 'slack') -and -not $Yes) {
+        Write-Info '열쇠가 이미 들어 있습니다. 그대로 쓰려면 Enter, 새 열쇠로 바꾸려면 y.'
+        if (Ask-YesNo '열쇠를 새로 넣을까요?' $false) { Fix-Slack -Force | Out-Null }
+    } else { Fix-Slack | Out-Null }
+    Test-SlackLive | Out-Null
+    # 모양은 맞는데 슬랙이 거절하면 그 자리에서 다시 넣게 한다. 예전에는 다시 실행해도 묻지 않고 지나가 같은 ❌ 만 반복됐다.
+    if ((Is-Ok 'slack') -and -not (Is-Ok 'slack-live') -and -not $Yes) {
+        Write-Warn '열쇠가 슬랙에 통하지 않습니다. 바로 위 NG 줄이 어느 열쇠가 틀렸는지 알려 줍니다.'
+        if (Ask-YesNo '지금 열쇠를 다시 넣을까요?' $true) { Fix-Slack -Force | Out-Null; Test-SlackLive | Out-Null }
+    }
     Write-Step '3/3 슬랙 서버 첫 기동 · 자동시작 등록'
-    Test-Server
-    Enable-Autostart
+    Test-Server | Out-Null
+    Enable-Autostart | Out-Null
 } elseif ($MailOnly) {
     # 메일_연결.bat — 부록 B-2
     try { $Host.UI.RawUI.WindowTitle = '에이전트팀 만들기 — 메일 연결' } catch {}
@@ -1024,10 +1033,10 @@ Write-Step '5/6 스타터킷 · 슬랙 열쇠 · 서버 첫 기동'
 Check-Folders | Out-Null
 Check-MyData | Out-Null
 Check-SlackEnv | Out-Null
-Fix-Slack
-Test-SlackLive
-Test-Server
-Enable-Autostart
+Fix-Slack | Out-Null
+Test-SlackLive | Out-Null
+Test-Server | Out-Null
+Enable-Autostart | Out-Null
 
 Write-Step '6/6 선택 항목 (메일 연결 · 네이버 블로그 로그인)'
 Check-MailEnv | Out-Null
