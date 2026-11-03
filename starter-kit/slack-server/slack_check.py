@@ -126,7 +126,8 @@ def main() -> int:
 
     # ② 앱 토큰 — 소켓 모드 연결 허가를 받아 본다 (connections:write 가 없으면 여기서 걸린다)
     try:
-        r = WebClient(token=app).apps_connections_open()
+        # slack_sdk 3.x 는 app_token= 을 꼭 받는다. 예전처럼 token= 으로 넣으면 TypeError (2026-11-03)
+        r = WebClient().apps_connections_open(app_token=app)
         if r.get("ok"):
             print("OK 앱 토큰(xapp-) 통과 — 소켓 연결 허용됨 (connections:write 있음)")
         else:
