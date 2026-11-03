@@ -6,8 +6,11 @@
   py -3.14 mail\\mail_read.py --since 2026-09-01    이 날짜 이후만
   py -3.14 mail\\mail_read.py --search 특강         제목·보낸 사람·본문에 이 낱말이 있는 것만
   py -3.14 mail\\mail_read.py --json                사람용 표 대신 JSON 배열
+  py -3.14 mail\\mail_read.py --full 3              목록의 3번 메일 한 통을 본문 끝까지 (첨부 이름도)
+  py -3.14 mail\\mail_read.py --search 견적 --full 1  '견적' 검색 결과의 1번을 끝까지
 
 한 통마다 번호 · 날짜 · 보낸 사람 · 제목, 그 아래 본문 앞 400자.
+--full 의 번호는 같은 조건(--unseen · --since · --search)으로 본 목록의 번호다.
 문의로 보이는 메일(문의·요청·견적·제안·회신·확인 부탁·일정·교육)에는 📌문의 가 붙는다.
 BODY.PEEK 로 읽어서 메일함의 "안 읽음" 상태가 그대로 남는다.
 🔒 비밀번호는 어디에도 찍지 않는다.
@@ -27,6 +30,7 @@ from mail_common import (KoArgumentParser, MailError, connect_imap, decode_str, 
 
 SNIPPET_LEN = 400
 SEARCH_SCAN_MAX = 200     # --search 는 서버가 한글 검색을 못 해서, 최근 이만큼 안에서 직접 걸러낸다
+FULL_MAX = 20000          # --full 도 이보다 길면 자른다 (뉴스레터 한 통이 대화를 다 채우지 않게)
 
 
 def _since_arg(s: str) -> str:
@@ -94,6 +98,9 @@ def fetch_messages(args) -> tuple[list[dict], str]:
                 "inquiry": looks_like_inquiry(subject, body),
                 "message_id": (msg.get("Message-ID") or "").strip(),
             })
+            if args.full:
+                out[-1]["body"] = body
+                out[-1]["attachments"] = [decode_str(p.get_filename()) for p in msg.walk() if p.get_filename()]
             if len(out) >= args.count:
                 break
         return out, f"{cfg.provider} {cfg.user}"
@@ -130,6 +137,24 @@ def print_table(items: list[dict], account: str, args) -> None:
         print(f"📌문의 로 보이는 메일 {n_inq}통 — 문의·요청·견적·제안·회신·확인 부탁·일정·교육 낱말이 들어 있습니다.")
 
 
+def print_full(m: dict) -> None:
+    """한 통을 본문 끝까지. 첨부는 이름만 (내용은 열지 않는다)."""
+    tag = "  📌문의" if m["inquiry"] else ""
+    print(f"{m['no']}번 메일 — 본문 전체")
+    print("─" * 72)
+    print(f"날짜: {m['date']}")
+    print(f"보낸 사람: {m['from']}")
+    print(f"받는 사람: {m['to']}")
+    print(f"제목: {m['subject']}{tag}")
+    if m["attachments"]:
+        print("첨부: " + ", ".join(m["attachments"]) + "  (첨부 내용은 열지 않습니다)")
+    print("─" * 72)
+    body = m["body"] or "(본문 없음)"
+    if len(body) > FULL_MAX:
+        body = body[:FULL_MAX] + f"\n… (너무 길어 {FULL_MAX:,}자에서 잘랐습니다. 나머지는 메일 앱에서 보세요)"
+    print(body)
+
+
 def main() -> int:
     ap = KoArgumentParser(
         prog="mail_read.py",
@@ -140,15 +165,32 @@ def main() -> int:
     ap.add_argument("--since", type=_since_arg, metavar="YYYY-MM-DD", help="이 날짜 이후 메일만")
     ap.add_argument("--search", metavar="키워드", help="제목·보낸 사람·본문에 이 낱말이 있는 것만")
     ap.add_argument("--json", action="store_true", help="표 대신 JSON 배열로 출력")
+    ap.add_argument("--full", type=int, metavar="번호", help="목록의 이 번호 메일 한 통을 본문 끝까지")
     args = ap.parse_args()
     if args.count < 1:
         ap.error("--count 는 1 이상이어야 합니다")
+    if args.full is not None:
+        if args.full < 1:
+            ap.error("--full 번호는 1 이상이어야 합니다")
+        args.count = args.full          # 그 번호까지만 받으면 된다
 
     try:
         items, account = fetch_messages(args)
     except MailError as e:
         die(e)
         return 1
+
+    if args.full:
+        if len(items) < args.full:
+            die(MailError(f"{args.full}번 메일이 없습니다 (조건에 맞는 메일 {len(items)}통)",
+                          "먼저 목록을 보고 번호를 확인하세요"))
+            return 1
+        m = items[args.full - 1]
+        if args.json:
+            print(json.dumps(m, ensure_ascii=False, indent=2))
+        else:
+            print_full(m)
+        return 0
 
     if args.json:
         print(json.dumps(items, ensure_ascii=False, indent=2))

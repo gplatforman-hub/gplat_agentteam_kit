@@ -8,7 +8,7 @@
 | 파일 | 하는 일 |
 |---|---|
 | `mail_check.py` | 로그인만 해 봅니다. `OK: naver hong@naver.com IMAP ✅ SMTP ✅` 한 줄이 나오면 연동 끝 |
-| `mail_read.py` | 받은편지함 최근 N통을 보여줍니다. 강의 문의로 보이는 메일엔 📌문의 표시. 읽음 표시는 안 바뀝니다 |
+| `mail_read.py` | 받은편지함 최근 N통을 보여줍니다. 강의 문의로 보이는 메일엔 📌문의 표시. 읽음 표시는 안 바뀝니다. 본문은 앞 400자, 한 통 전체는 `--full 번호` |
 | `mail_send.py` | 메일을 보냅니다. 단, `--approved` 가 없으면 **초안만 보여주고 안 보냅니다** |
 | `skill/SKILL.md` | 직원이 언제 어느 스크립트를 쓰는지 적힌 안내서. `.claude/skills/mail/SKILL.md` 로 복사하면 직원이 읽습니다 |
 | `.env.example` | 설정 견본. 복사해서 `.env` 로 만듭니다 |
