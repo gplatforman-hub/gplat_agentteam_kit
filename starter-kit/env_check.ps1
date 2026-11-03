@@ -840,85 +840,107 @@ $WD_SYMBOL_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAGYAAAByCAYAAAChmKTvAAAmHUlEQVR42u19eZ
 function Html([string]$s) { return [System.Net.WebUtility]::HtmlEncode($s) }
 
 function Write-Report {
+    # 2026-11-03: 교안과 같은 디자인(청록 · 유리 카드 · 밝은/어두운 화면)으로 바꿈
     $req = @($script:Results | Where-Object { $_.Group -ne '선택' })
     $opt = @($script:Results | Where-Object { $_.Group -eq '선택' })
     $reqOk = @($req | Where-Object { $_.Ok }).Count
     $optOk = @($opt | Where-Object { $_.Ok }).Count
     $allOk = ($reqOk -eq $req.Count)
-    $verdict = '아직 준비가 덜 됐습니다 — ❌ 줄만 고치면 됩니다'
-    $verdictClass = 'bad'
-    if ($allOk) { $verdict = '출발 준비 완료! 강의 당일 바로 시작할 수 있습니다'; $verdictClass = 'good' }
+    $verdict = '아직 준비가 덜 됐습니다'
+    $verdictSub = '빨간 줄만 고치면 됩니다. 고치는 법은 그 줄에 적혀 있습니다.'
+    $verdictClass = 'bad'; $verdictIcon = '!'
+    if ($allOk) { $verdict = '출발 준비 완료'; $verdictSub = '이제 슬랙에서 AI 에게 「안녕」 을 보내 보세요.'; $verdictClass = 'good'; $verdictIcon = '✓' }
+    $pct = 0; if ($req.Count) { $pct = [int](100 * $reqOk / $req.Count) }
 
     $sb = New-Object System.Text.StringBuilder
     $null = $sb.Append(@"
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>환경 점검 결과 — 에이전트팀 만들기</title>
+<title>환경 점검 결과</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{--p:#7B2D8E;--deep:#3D1249;--dark:#5A1E6B;--band:#F8F5FA;--line:#E8DEF0;--ok:#1E9E5A;--no:#E84393;--gold:#F5A623;--ink:#1f1a24}
+:root{--bg:#e9f3f1;--blob-a:#9fdccc;--blob-b:#b9d4f2;--blob-c:#f4dcb8;--ink:#16302c;--ink-soft:#4b6661;--glass:rgba(255,255,255,.62);--glass-line:rgba(255,255,255,.75);--edge:rgba(22,48,44,.12);--accent:#0f7f6c;--accent-ink:#fff;--accent-soft:rgba(15,127,108,.12);--good:#15803d;--good-soft:rgba(21,128,61,.12);--bad:#c2410c;--bad-soft:rgba(194,65,12,.11);--warn:#b45309;--warn-soft:rgba(180,83,9,.10);--shadow:0 10px 30px rgba(22,48,44,.10);--font:"Gowun Dodum","Malgun Gothic","맑은 고딕",sans-serif;--mono:"IBM Plex Mono",Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1c1b;--blob-a:#1f5c52;--blob-b:#1e3a5c;--blob-c:#4a3a22;--ink:#e3f1ee;--ink-soft:#9bb8b2;--glass:rgba(24,46,44,.62);--glass-line:rgba(255,255,255,.10);--edge:rgba(227,241,238,.12);--accent:#4fd1b5;--accent-ink:#06201b;--accent-soft:rgba(79,209,181,.14);--good:#5fd38a;--good-soft:rgba(95,211,138,.14);--bad:#fb8a5c;--bad-soft:rgba(251,138,92,.14);--warn:#f5a454;--warn-soft:rgba(245,164,84,.12);--shadow:0 10px 30px rgba(0,0,0,.35)}}
 *{box-sizing:border-box}
-body{margin:0;background:#fff;color:var(--ink);font-family:"Noto Sans KR","Noto Sans Korean","Noto Sans CJK KR","NotoSansKR","Malgun Gothic","맑은 고딕",sans-serif;line-height:1.55}
-code,pre{font-family:"Noto Sans KR","Noto Sans Korean","Noto Sans CJK KR","NotoSansKR","Malgun Gothic","맑은 고딕",sans-serif}
-.nav{display:flex;align-items:center;gap:12px;padding:14px 32px;border-bottom:1px solid var(--line)}
-.nav img{height:38px;width:auto}
-.nav .t{font-weight:700;color:var(--deep)}
-.nav .s{color:#6b6470;font-size:13px;margin-left:auto}
-.wrap{max-width:960px;margin:0 auto;padding:48px 24px 80px}
-h1{margin:0 0 8px;font-size:30px;color:var(--deep);letter-spacing:-.01em}
-.lede{margin:0 0 28px;color:#5c5661}
-.verdict{border-radius:16px;padding:22px 26px;margin:0 0 36px;font-size:19px;font-weight:700;display:flex;align-items:center;gap:14px}
-.verdict.good{background:#eaf7ef;color:#155c36;border:1px solid #bfe6cf}
-.verdict.bad{background:#fdeef5;color:#8a1e4f;border:1px solid #f6c6dc}
-.verdict .n{font-size:14px;font-weight:500;margin-left:auto;opacity:.8}
-h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--p);margin:36px 0 12px}
-table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:16px;overflow:hidden}
-th{background:var(--dark);color:#fff;text-align:left;font-weight:600;font-size:13px;padding:10px 14px}
-td{padding:12px 14px;border-top:1px solid var(--line);vertical-align:top;font-size:14px}
-tr:nth-child(even) td{background:var(--band)}
-td.m{width:44px;text-align:center;font-size:18px}
-td.name{font-weight:600;width:34%}
-.detail{color:#5c5661}
-.fix{color:var(--deep);margin-top:4px;font-size:13px}
-.fix a{color:var(--p);font-weight:600;text-decoration:none}
-.fix a:hover{text-decoration:underline}
-.slab{margin-top:56px;background:var(--deep);color:#eadff0;border-radius:16px;padding:28px 30px}
-.slab b{color:#A855F7}
-.slab ol{margin:8px 0 0 18px;padding:0}
-.foot{margin-top:18px;font-size:12px;color:#8a8390}
-@media print{.nav{border:0}.slab{background:#fff;color:#000;border:1px solid #ccc}}
-</style></head><body>
-<div class="nav"><span class="t">에이전트팀 만들기 과정</span><span class="s">환경 점검 · $($STARTED.ToString('yyyy-MM-dd HH:mm'))</span></div>
-<div class="wrap">
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.6;font-size:15px}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;background:radial-gradient(40% 35% at 15% 10%,var(--blob-a),transparent 70%),radial-gradient(35% 30% at 90% 25%,var(--blob-b),transparent 70%),radial-gradient(40% 35% at 60% 95%,var(--blob-c),transparent 70%);filter:blur(30px);opacity:.75}
+.wrap{max-width:880px;margin:0 auto;padding:28px 16px 64px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:22px}
+.eyebrow{font-size:13px;letter-spacing:.08em;color:var(--accent)}
+.when{margin-left:auto;font-size:13px;color:var(--ink-soft)}
+h1{margin:0 0 4px;font-size:clamp(26px,5vw,36px);font-weight:400;letter-spacing:-.01em}
+.lede{margin:0 0 22px;color:var(--ink-soft);font-size:14px;word-break:break-all}
+.glass{background:var(--glass);border:1px solid var(--glass-line);border-radius:22px;box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3)}
+.verdict{display:flex;align-items:center;gap:16px;padding:20px 22px;margin-bottom:26px}
+.badge{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:26px;color:#fff}
+.verdict.good .badge{background:var(--good)} .verdict.bad .badge{background:var(--bad)}
+.verdict .t{font-size:21px}
+.verdict .s{color:var(--ink-soft);font-size:14px}
+.score{margin-left:auto;text-align:right;flex:none}
+.score .n{font-family:var(--mono);font-size:22px;color:var(--accent)}
+.score .l{font-size:12px;color:var(--ink-soft)}
+.bar{height:6px;border-radius:6px;background:var(--edge);margin-top:6px;overflow:hidden;width:120px}
+.bar i{display:block;height:100%;background:var(--accent)}
+h2{font-size:14px;font-weight:400;letter-spacing:.06em;color:var(--accent);margin:26px 4px 10px}
+.list{padding:6px 0;overflow:hidden}
+.row{display:grid;grid-template-columns:34px 1fr;gap:4px 12px;padding:14px 18px;border-top:1px solid var(--edge)}
+.row:first-child{border-top:0}
+.mark{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:15px;margin-top:1px}
+.ok .mark{background:var(--good-soft);color:var(--good)}
+.no .mark{background:var(--bad-soft);color:var(--bad)}
+.opt .mark{background:var(--warn-soft);color:var(--warn)}
+.name{font-size:15.5px}
+.detail{grid-column:2;color:var(--ink-soft);font-size:14px;word-break:break-word}
+.fix{grid-column:2;margin-top:6px;padding:8px 12px;border-radius:10px;background:var(--bad-soft);font-size:14px}
+.opt .fix{background:var(--warn-soft)}
+.fix a{color:var(--accent);word-break:break-all}
+.next{margin-top:30px;padding:20px 22px}
+.next h3{margin:0 0 8px;font-size:16px;font-weight:400;color:var(--accent)}
+.next ol{margin:0;padding-left:20px}
+.next li{margin:4px 0}
+.next b{font-weight:400;font-family:var(--mono);font-size:13.5px;background:var(--accent-soft);padding:1px 6px;border-radius:6px}
+.foot{margin-top:14px;font-size:12px;color:var(--ink-soft)}
+@media (max-width:560px){.verdict{flex-wrap:wrap}.score{margin-left:68px;text-align:left}}
+@media print{body::before{display:none}.glass{box-shadow:none;backdrop-filter:none;border-color:#ccc}}
+</style></head><body><div class="wrap">
+<div class="top"><span class="eyebrow">클로드코드 업무자동화과정 · 환경 점검</span><span class="when">$($STARTED.ToString('yyyy-MM-dd HH:mm'))</span></div>
 <h1>출발선 점검 결과</h1>
 <p class="lede">$(Html $env:COMPUTERNAME) · $(Html $KIT)</p>
-<div class="verdict $verdictClass"><span>$(if($allOk){'🎉'}else{'🛠'})</span><span>$verdict</span><span class="n">필수 $reqOk/$($req.Count) · 선택 $optOk/$($opt.Count)</span></div>
+<div class="glass verdict $verdictClass"><span class="badge">$verdictIcon</span><div><div class="t">$verdict</div><div class="s">$verdictSub</div></div>
+<div class="score"><div class="n">$reqOk/$($req.Count)</div><div class="l">필수 통과 · 선택 $optOk/$($opt.Count)</div><div class="bar"><i style="width:$pct%"></i></div></div></div>
 "@)
 
-    foreach ($grp in @(@('필수 — 이게 다 ✅ 여야 수업을 시작할 수 있습니다', $req), @('선택 — 없어도 실습되지만, 집에서 스킬을 쓰려면 필요합니다', $opt))) {
-        $null = $sb.Append("<h2>$($grp[0])</h2><table><tr><th></th><th>항목</th><th>확인 결과</th></tr>")
+    foreach ($grp in @(@('필수 — 모두 통과해야 수업을 시작할 수 있습니다', $req), @('선택 — 없어도 실습은 되지만, 집에서 스킬을 쓰려면 필요합니다', $opt))) {
+        if (-not $grp[1].Count) { continue }
+        $null = $sb.Append("<h2>$($grp[0])</h2><div class=`"glass list`">")
         foreach ($r in $grp[1]) {
-            $m = '❌'; if ($r.Group -eq '선택') { $m = '⚠️' }; if ($r.Ok) { $m = '✅' }
+            $cls = 'no'; $m = '✕'
+            if ($r.Group -eq '선택') { $cls = 'opt'; $m = '!' }
+            if ($r.Ok) { $cls = 'ok'; $m = '✓' }
             $fix = ''
             if (-not $r.Ok -and ($r.Fix -or $r.Url)) {
                 $fix = '<div class="fix">→ ' + (Html $r.Fix)
                 if ($r.Url) { $fix += " <a href=`"$($r.Url)`" target=`"_blank`" rel=`"noopener`">$(Html $r.Url)</a>" }
                 $fix += '</div>'
             }
-            $null = $sb.Append("<tr><td class=`"m`">$m</td><td class=`"name`">$(Html $r.Name)</td><td><div class=`"detail`">$(Html $r.Detail)</div>$fix</td></tr>")
+            $null = $sb.Append("<div class=`"row $cls`"><span class=`"mark`">$m</span><div class=`"name`">$(Html $r.Name)</div><div class=`"detail`">$(Html $r.Detail)</div>$fix</div>")
         }
-        $null = $sb.Append('</table>')
+        $null = $sb.Append('</div>')
     }
 
+    if ($allOk) {
+        $next = '<li>슬랙 앱에서 AI 와 1:1 대화를 열고 <b>안녕</b> → 내 이름으로 대답하면 성공입니다.</li>' +
+                '<li><b>팀 소개</b> 를 보내면 직원들이 각자 이름·아이콘으로 인사합니다.</li>' +
+                '<li>직원을 새로 만들거나 고친 뒤에는 <b>자동시작_켜기.bat</b> 을 더블클릭해 서버를 다시 켭니다.</li>'
+    } else {
+        $next = '<li>슬랙 줄만 빨간색이면 정상입니다. 교안 <b>슬랙 ①②</b> 로 열쇠를 받은 뒤 <b>슬랙열쇠_넣기.bat</b> 을 더블클릭합니다.</li>' +
+                '<li>다른 빨간 줄이 있으면 그 줄의 안내대로 고치고 <b>환경점검.bat</b> 을 다시 더블클릭합니다.</li>' +
+                '<li>주황색(!) 은 선택 항목이라 없어도 수업이 됩니다. 메일은 부록 B-2 의 <b>메일_연결.bat</b> 으로 따로 합니다.</li>'
+    }
     $null = $sb.Append(@"
-<div class="slab"><b>다음 할 일</b>
-<ol>
-<li>슬랙 줄만 ❌ 라면 정상입니다. 교안 <b>슬랙 ①②</b> 로 열쇠를 받은 뒤 <b>슬랙열쇠_넣기.bat</b> 을 더블클릭합니다.</li>
-<li>다른 ❌ 가 있으면 그 줄의 안내대로 고치고 <b>환경점검.bat</b> 을 다시 더블클릭합니다.</li>
-<li>⚠️ 는 선택 항목이라 없어도 수업이 됩니다. 메일은 부록 B-2 의 <b>메일_연결.bat</b> 으로 따로 합니다.</li>
-</ol>
-<div class="foot">이 점검은 열쇠 값을 읽거나 저장하지 않으며, 로그인은 항상 본인이 직접 합니다. · gplatform</div>
-</div>
+<div class="glass next"><h3>다음 할 일</h3><ol>$next</ol>
+<div class="foot">이 점검은 열쇠 값을 화면에 보여 주거나 이 파일에 저장하지 않습니다. 로그인은 항상 본인이 직접 합니다. · 지플랫폼</div></div>
 </div></body></html>
 "@)
     [IO.File]::WriteAllText($REPORT, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
