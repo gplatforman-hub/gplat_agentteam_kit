@@ -3,6 +3,7 @@
 .env.local
 slack-server/.env
 naver-blog/.env
+naver-calendar/.env
 naver-blog/.naver-state.json
 naver-blog/.blog-id
 naver-blog/.naver-profile/

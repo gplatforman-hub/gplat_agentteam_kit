@@ -769,8 +769,15 @@ function Fix-Mail {
     # 메일은 선택이다. 슬랙 열쇠처럼 별표로 받아 mail\.env 에만 저장한다. s 면 건너뛴다.
     # 2026-11-02: 설치·환경점검에서는 묻지 않는다. 메일_연결.bat(-MailOnly) 또는 -Mail 일 때만.
     if (-not ($Mail -or $MailOnly)) { return }
-    if ((Is-Ok 'mail') -or $SkipLogin) { return }
+    if ($SkipLogin) { return }
     if (-not (Test-Path (Join-Path $KIT 'mail\mail_check.py'))) { return }
+    # 2026-11-04: 이미 연결돼 있으면 바꿀지 묻는다 (지메일 → 네이버 등). 그냥 Enter 면 그대로.
+    if (Is-Ok 'mail') {
+        $cur = ((Get-Result 'mail').Detail -replace '\s*\(비밀번호는 확인하지 않습니다\)', '').Trim()
+        $ans = (Read-Host "  ? 지금 $cur 이(가) 연결돼 있습니다. 다른 메일로 바꿀까요? (y = 바꾸기 / 그냥 Enter = 그대로)").Trim().ToLower()
+        if ($ans -ne 'y') { return }
+        Write-Info '새 메일로 다시 묻습니다. 끝까지 넣으면 예전 연결은 새 것으로 바뀝니다 (메일 연결은 한 계정만 기억합니다).'
+    }
     $envf = Join-Path $KIT 'mail\.env'
     Write-Step '메일 연결 (선택) — 메일을 직원이 읽게 합니다. 앱 비밀번호는 교안 부록 B-2 대로 미리 받아 둡니다'
     Write-Info '연습은 개인 메일로 합니다. 회사 메일은 회사 승인을 받은 뒤에만 custom 으로 연결합니다.'
